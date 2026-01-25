@@ -5,8 +5,16 @@ Powered by [doi.org](https://www.doi.org/) and the [Crossref API](https://api.cr
 
 ## Installation
 
+### `pip`
+
 ```bash
 pip install fetchbib
+```
+
+### `uv`
+
+```bash
+uv tool install fetchbib
 ```
 
 Requires Python 3.9+.
@@ -116,8 +124,11 @@ Clone the repo and sync dependencies with [uv](https://docs.astral.sh/uv/):
 ```bash
 git clone https://github.com/mr-devs/fetchbib.git
 cd fetchbib
-uv sync
+uv tool install -e . # OR pip install -e .
 ```
+
+> The `-e` flag (`uv tool install -e .`), it performs an editable installation.
+> This means any changes you make to the local source code are immediately reflected when you run the command, without needing to reinstall.
 
 Run unit tests:
 
