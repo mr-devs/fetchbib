@@ -10,13 +10,8 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
+from conftest import DOI_A, DOI_B, DOI_URL_A, RAW_BIBTEX_A, RAW_BIBTEX_B, SEARCH_QUERY_A
 from fetchbib.resolver import ResolverError
-
-# Sample raw BibTeX that the mock resolver returns (unformatted).
-RAW_BIBTEX_A = "@article{Key1,author={Alice},year={2020}}"
-RAW_BIBTEX_B = "@article{Key2,author={Bob},year={2021}}"
 
 
 def run_cli(args: list[str]) -> tuple[int, str, str]:
@@ -51,15 +46,15 @@ class TestInputParsing:
 
     @patch("fetchbib.cli.resolve_doi", return_value=RAW_BIBTEX_A)
     def test_single_positional_doi(self, mock_resolve):
-        code, stdout, _ = run_cli(["10.2196/jmir.1933"])
+        code, stdout, _ = run_cli([DOI_A])
 
-        mock_resolve.assert_called_once_with("10.2196/jmir.1933")
+        mock_resolve.assert_called_once_with(DOI_A)
         assert "@article{Key1," in stdout
         assert code == 0
 
     @patch("fetchbib.cli.resolve_doi", side_effect=[RAW_BIBTEX_A, RAW_BIBTEX_B])
     def test_multiple_positional_arguments(self, mock_resolve):
-        code, stdout, _ = run_cli(["10.2196/jmir.1933", "10.1000/xyz123"])
+        code, stdout, _ = run_cli([DOI_A, DOI_B])
 
         assert mock_resolve.call_count == 2
         assert "Key1" in stdout
@@ -68,18 +63,18 @@ class TestInputParsing:
 
     @patch("fetchbib.cli.resolve_doi", side_effect=[RAW_BIBTEX_A, RAW_BIBTEX_B])
     def test_comma_separated_string_is_split(self, mock_resolve):
-        code, stdout, _ = run_cli(["10.2196/jmir.1933, 10.1000/xyz123"])
+        code, stdout, _ = run_cli([f"{DOI_A}, {DOI_B}"])
 
         assert mock_resolve.call_count == 2
         calls = [c.args[0] for c in mock_resolve.call_args_list]
-        assert "10.2196/jmir.1933" in calls
-        assert "10.1000/xyz123" in calls
+        assert DOI_A in calls
+        assert DOI_B in calls
         assert code == 0
 
     @patch("fetchbib.cli.resolve_doi", side_effect=[RAW_BIBTEX_A, RAW_BIBTEX_B])
     def test_file_input_reads_lines(self, mock_resolve):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            f.write("10.2196/jmir.1933\n\n10.1000/xyz123\n")
+            f.write(f"{DOI_A}\n\n{DOI_B}\n")
             f.flush()
             code, stdout, _ = run_cli(["--file", f.name])
 
@@ -89,27 +84,27 @@ class TestInputParsing:
     @patch("fetchbib.cli.resolve_doi", side_effect=[RAW_BIBTEX_A, RAW_BIBTEX_B])
     def test_file_input_splits_comma_separated_line(self, mock_resolve):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            f.write("10.2196/jmir.1933, 10.1000/xyz123\n")
+            f.write(f"{DOI_A}, {DOI_B}\n")
             f.flush()
             code, stdout, _ = run_cli(["--file", f.name])
 
         assert mock_resolve.call_count == 2
         calls = [c.args[0] for c in mock_resolve.call_args_list]
-        assert "10.2196/jmir.1933" in calls
-        assert "10.1000/xyz123" in calls
+        assert DOI_A in calls
+        assert DOI_B in calls
         assert code == 0
 
     @patch("fetchbib.cli.resolve_doi", return_value=RAW_BIBTEX_A)
     def test_doi_url_is_normalized(self, mock_resolve):
-        code, stdout, _ = run_cli(["https://doi.org/10.2196/jmir.1933"])
+        code, stdout, _ = run_cli([DOI_URL_A])
 
-        mock_resolve.assert_called_once_with("10.2196/jmir.1933")
+        mock_resolve.assert_called_once_with(DOI_A)
         assert "@article{Key1," in stdout
         assert code == 0
 
     @patch("fetchbib.cli.resolve_doi", return_value=RAW_BIBTEX_A)
     def test_duplicate_inputs_are_deduplicated(self, mock_resolve):
-        code, _, _ = run_cli(["10.2196/jmir.1933", "10.2196/jmir.1933"])
+        code, _, _ = run_cli([DOI_A, DOI_A])
 
         mock_resolve.assert_called_once()
         assert code == 0
@@ -158,12 +153,12 @@ class TestVerbose:
     """Tests for the --verbose flag."""
 
     @patch("fetchbib.cli.resolve_doi", return_value=RAW_BIBTEX_A)
-    @patch("fetchbib.cli.search_crossref", return_value="10.2196/jmir.1933")
+    @patch("fetchbib.cli.search_crossref", return_value=DOI_A)
     def test_verbose_prints_search_mapping(self, mock_search, mock_resolve):
-        code, _, stderr = run_cli(["-v", "Eysenbach JMIR 2011"])
+        code, _, stderr = run_cli(["-v", SEARCH_QUERY_A])
 
-        assert "Eysenbach JMIR 2011" in stderr
-        assert "10.2196/jmir.1933" in stderr
+        assert SEARCH_QUERY_A in stderr
+        assert DOI_A in stderr
         assert code == 0
 
 
@@ -174,6 +169,12 @@ class TestVerbose:
 
 class TestOutputFile:
     """Tests for --output and --append flags."""
+
+    def test_append_without_output_exits_2(self):
+        code, _, stderr = run_cli(["--append", "10.1234/test"])
+
+        assert code == 2
+        assert "--append requires --output" in stderr
 
     @patch("fetchbib.cli.resolve_doi", return_value=RAW_BIBTEX_A)
     def test_output_writes_to_file(self, mock_resolve):

@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from conftest import DOI_A, SEARCH_QUERY_A
 from fetchbib.resolver import (
     ResolverError,
     is_doi,
@@ -72,7 +73,7 @@ class TestNormalizeDOIInput:
         assert normalize_doi_input("10.2196/jmir.1933") == "10.2196/jmir.1933"
 
     def test_non_doi_string_unchanged(self):
-        assert normalize_doi_input("Eysenbach JMIR 2011") == "Eysenbach JMIR 2011"
+        assert normalize_doi_input(SEARCH_QUERY_A) == SEARCH_QUERY_A
 
 
 # ---------------------------------------------------------------------------
@@ -125,14 +126,14 @@ class TestSearchCrossref:
         mock_resp.json.return_value = {
             "message": {
                 "items": [
-                    {"DOI": "10.2196/jmir.1933"},
+                    {"DOI": DOI_A},
                     {"DOI": "10.9999/other"},
                 ]
             }
         }
         mock_get.return_value = mock_resp
 
-        assert search_crossref("Eysenbach JMIR 2011") == "10.2196/jmir.1933"
+        assert search_crossref(SEARCH_QUERY_A) == DOI_A
 
     @patch("fetchbib.resolver.requests.get")
     def test_raises_on_empty_results(self, mock_get):
@@ -185,13 +186,13 @@ class TestResolve:
     @patch("fetchbib.resolver.resolve_doi")
     @patch("fetchbib.resolver.search_crossref")
     def test_routes_non_doi_through_search(self, mock_search, mock_resolve_doi):
-        mock_search.return_value = "10.2196/jmir.1933"
+        mock_search.return_value = DOI_A
         mock_resolve_doi.return_value = "@article{...}"
 
-        resolve("Eysenbach JMIR 2011")
+        resolve(SEARCH_QUERY_A)
 
-        mock_search.assert_called_once_with("Eysenbach JMIR 2011")
-        mock_resolve_doi.assert_called_once_with("10.2196/jmir.1933")
+        mock_search.assert_called_once_with(SEARCH_QUERY_A)
+        mock_resolve_doi.assert_called_once_with(DOI_A)
 
 
 # ---------------------------------------------------------------------------

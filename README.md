@@ -44,7 +44,7 @@ fbib https://doi.org/10.1073/pnas.2322823121
 }
 ```
 
-Search by free text:
+Search by free text by including text between quotes:
 
 ```bash
 fbib "DeVerna Fact-checking information from large language models"

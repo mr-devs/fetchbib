@@ -8,8 +8,9 @@ import tempfile
 
 import pytest
 
+from conftest import AUTHOR_A, DOI_A, SEARCH_QUERY_A
 from fetchbib.formatter import format_bibtex
-from fetchbib.resolver import resolve, resolve_doi, search_crossref
+from fetchbib.resolver import resolve_doi, search_crossref
 
 pytestmark = pytest.mark.integration
 
@@ -18,16 +19,16 @@ class TestLiveResolution:
     """End-to-end tests against doi.org and Crossref."""
 
     def test_doi_resolution(self):
-        raw = resolve_doi("10.2196/jmir.1933")
+        raw = resolve_doi(DOI_A)
         result = format_bibtex(raw)
-        assert "Eysenbach" in result
-        assert "2011" in result
+        assert AUTHOR_A in result
+        assert "2024" in result
 
     def test_free_text_search(self):
-        doi = search_crossref("Eysenbach JMIR 2011")
+        doi = search_crossref(SEARCH_QUERY_A)
         raw = resolve_doi(doi)
         result = format_bibtex(raw)
-        assert "Eysenbach" in result
+        assert AUTHOR_A in result
 
     def test_file_input_via_cli(self):
         """Resolve a DOI through the full CLI path."""
@@ -38,7 +39,7 @@ class TestLiveResolution:
         from fetchbib.cli import main
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            f.write("10.2196/jmir.1933\n")
+            f.write(f"{DOI_A}\n")
             f.flush()
             path = f.name
 
@@ -55,4 +56,4 @@ class TestLiveResolution:
             sys.argv = old_argv
 
         output = stdout_capture.getvalue()
-        assert "Eysenbach" in output
+        assert AUTHOR_A in output

@@ -26,7 +26,11 @@ def main() -> None:
     parser.add_argument(
         "inputs",
         nargs="*",
-        help="DOIs or search queries (comma-separated values are split)",
+        help=(
+            "DOIs (e.g., 10.1234/example), DOI URLs (e.g., https://doi.org/10.1234/example), "
+            'or quoted free-text queries (e.g., "Author Title 2024"). '
+            "Comma-separated values are split."
+        ),
     )
     parser.add_argument(
         "-f",

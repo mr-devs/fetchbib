@@ -14,12 +14,12 @@ The `integration` marker is registered and excluded from the default test run in
 
 ### Test 1 — DOI resolution end-to-end
 
-Resolve `10.2196/jmir.1933`. Verify the output contains `Eysenbach` and `2011`.
+Resolve `10.1073/pnas.2322823121`. Verify the output contains `DeVerna` and `2024`.
 
 ### Test 2 — Free-text search end-to-end
 
-Search `"Eysenbach JMIR 2011"`. Verify the output contains `Eysenbach`.
+Search `"DeVerna Fact-checking information from large language models"`. Verify the output contains `DeVerna`.
 
 ### Test 3 — File input end-to-end
 
-Write a temp file with `10.2196/jmir.1933` and run through the CLI. Verify BibTeX output.
+Write a temp file with `10.1073/pnas.2322823121` and run through the CLI. Verify BibTeX output.

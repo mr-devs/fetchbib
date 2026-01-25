@@ -18,17 +18,23 @@ The raw BibTeX returned by servers is often a single, long line. The formatter m
 
 Input:
 ```
-@article{Eysenbach2011,doi={10.2196/jmir.1933},title={Can Tweets Predict Citations?},author={Eysenbach, Gunther},year={2011},journal={JMIR}}
+@article{DeVerna_2024,author={DeVerna, Matthew R. and Yan, Harry Yaojun and Yang, Kai-Cheng and Menczer, Filippo},doi={10.1073/pnas.2322823121},issn={1091-6490},journal={Proceedings of the National Academy of Sciences},month=dec,number={50},publisher={Proceedings of the National Academy of Sciences},title={Fact-checking information from large language models can decrease headline discernment},url={http://dx.doi.org/10.1073/pnas.2322823121},volume={121},year={2024}}
 ```
 
 Expected output:
 ```
-@article{Eysenbach2011,
-  author = {Eysenbach, Gunther},
-  doi = {10.2196/jmir.1933},
-  journal = {JMIR},
-  title = {Can Tweets Predict Citations?},
-  year = {2011}
+@article{DeVerna_2024,
+  author = {DeVerna, Matthew R. and Yan, Harry Yaojun and Yang, Kai-Cheng and Menczer, Filippo},
+  doi = {10.1073/pnas.2322823121},
+  issn = {1091-6490},
+  journal = {Proceedings of the National Academy of Sciences},
+  month = dec,
+  number = {50},
+  publisher = {Proceedings of the National Academy of Sciences},
+  title = {Fact-checking information from large language models can decrease headline discernment},
+  url = {http://dx.doi.org/10.1073/pnas.2322823121},
+  volume = {121},
+  year = {2024}
 }
 ```
 
