@@ -58,6 +58,10 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    # --append requires --output
+    if args.append and not args.output:
+        parser.error("--append requires --output")
+
     # --config-email: save and exit immediately
     if args.config_email:
         config.set_email(args.config_email)
