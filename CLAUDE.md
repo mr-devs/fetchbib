@@ -9,8 +9,8 @@ This document describes the coding principles and conventions for the `fetchbib`
 ## Development Setup
 
 ```bash
-uv sync        # Install dependencies (prefer uv over pip)
-uv run pytest  # Run tests
+uv tool install -e . # Install tool as editable to reflect latest changes immediately
+uv run pytest        # Run tests
 ```
 
 ## Package Management
@@ -27,6 +27,7 @@ This project follows **test-driven development (TDD)**:
 3. All new functionality should have corresponding tests
 
 **Test organization:**
+
 - Unit tests mock external dependencies (no network calls)
 - Integration tests are marked with `@pytest.mark.integration` and excluded by default
 - Run integration tests explicitly: `uv run pytest -m integration`
