@@ -16,24 +16,30 @@ Requires Python 3.9+.
 Fetch BibTeX by DOI (bare or full URL):
 
 ```bash
-fbib 10.2196/jmir.1933
-fbib https://doi.org/10.2196/jmir.1933
+fbib 10.1073/pnas.2322823121
+fbib https://doi.org/10.1073/pnas.2322823121
 ```
 
 ```bibtex
-@article{Eysenbach2011,
-  author = {Eysenbach, Gunther},
-  doi = {10.2196/jmir.1933},
-  journal = {Journal of Medical Internet Research},
-  title = {Can Tweets Predict Citations? Metrics of Social Impact Based on Twitter and Correlation with Traditional Metrics of Scientific Impact},
-  year = {2011}
+@article{DeVerna_2024,
+  author = {DeVerna, Matthew R. and Yan, Harry Yaojun and Yang, Kai-Cheng and Menczer, Filippo},
+  DOI = {10.1073/pnas.2322823121},
+  ISSN = {1091-6490},
+  journal = {Proceedings of the National Academy of Sciences},
+  month = dec,
+  number = {50},
+  publisher = {Proceedings of the National Academy of Sciences},
+  title = {Fact-checking information from large language models can decrease headline discernment},
+  url = {http://dx.doi.org/10.1073/pnas.2322823121},
+  volume = {121},
+  year = {2024}
 }
 ```
 
 Search by free text:
 
 ```bash
-fbib "Eysenbach JMIR 2011"
+fbib "DeVerna Fact-checking information from large language models"
 ```
 
 ## Usage
@@ -50,16 +56,16 @@ Inputs are comma-separated, so all of the following work:
 
 ```bash
 # Multiple positional arguments
-fbib 10.2196/jmir.1933 10.1038/nature12373
+fbib 10.1609/icwsm.v5i1.14126 10.1093/jcmc/zmz022
 
 # Comma-separated string
-fbib "10.2196/jmir.1933, 10.1038/nature12373"
+fbib "10.1609/icwsm.v5i1.14126, 10.1093/jcmc/zmz022"
 
 # Full DOI URLs
-fbib "https://doi.org/10.2196/jmir.1933, https://doi.org/10.1038/nature12373"
+fbib "https://doi.org/10.1609/icwsm.v5i1.14126, https://doi.org/10.1093/jcmc/zmz022"
 
 # Mix DOIs, URLs, and search queries
-fbib 10.2196/jmir.1933 "Eysenbach JMIR 2011"
+fbib 10.1609/icwsm.v5i1.14126 "DeVerna Fact-checking information from large language models"
 ```
 
 From a file (`--file`), each line is treated the same way — one entry per line, or comma-separated on a single line:
@@ -75,13 +81,13 @@ Duplicate inputs are automatically removed.
 Overwrite (default):
 
 ```bash
-fbib --output refs.bib 10.2196/jmir.1933
+fbib --output refs.bib 10.1609/icwsm.v5i1.14126
 ```
 
 Append to an existing `.bib` file:
 
 ```bash
-fbib --append --output refs.bib 10.1038/nature12373
+fbib --append --output refs.bib 10.1093/jcmc/zmz022
 ```
 
 ### Verbose mode
@@ -89,11 +95,11 @@ fbib --append --output refs.bib 10.1038/nature12373
 See which DOI was matched when searching by free text:
 
 ```bash
-fbib -v "Eysenbach JMIR 2011"
-# stderr: Searching for: "Eysenbach JMIR 2011" -> DOI: 10.2196/jmir.1933
+fbib -v "DeVerna Fact-checking information from large language models"
+# stderr: Searching for: "DeVerna Fact-checking information from large language models" -> DOI: 10.1073/pnas.2322823121
 ```
 
-### Configure email
+### Configure email (optional)
 
 Crossref gives better rate limits to requests that include a contact email. Set yours once and it will be used for all future requests:
 
@@ -124,7 +130,3 @@ Run integration tests (hits live APIs):
 ```bash
 uv run pytest -m integration
 ```
-
-## License
-
-MIT
