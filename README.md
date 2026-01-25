@@ -45,7 +45,8 @@ fbib [-h] [-f FILE] [-o OUTPUT] [-a] [-v] [--config-email EMAIL]
 
 ### Flexible input
 
-`fbib` accepts DOIs in any format — bare, full URL, or free-text search queries — and you can mix them freely. Inputs are comma-separated, so all of the following work:
+`fbib` accepts DOIs in any format — bare, full URL, or free-text search queries — and you can mix them freely.
+Inputs are comma-separated, so all of the following work:
 
 ```bash
 # Multiple positional arguments
