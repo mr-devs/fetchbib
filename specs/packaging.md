@@ -66,20 +66,13 @@ set -euo pipefail
 # Clean previous builds
 rm -rf dist/ build/ src/*.egg-info
 
-# Install/upgrade build tools
-python3 -m pip install --upgrade build twine
-
 # Build
-python3 -m build
+uv build
 
-# Upload (use --repository testpypi for dry runs)
-if [[ "${1:-}" == "--test" ]]; then
-    python3 -m twine upload --repository testpypi dist/*
-else
-    python3 -m twine upload dist/*
-fi
+# Upload to PyPI
+uv publish
 ```
 
 - `set -euo pipefail` ensures the script stops on any error.
 - Old `dist/` and `build/` artifacts are cleaned before building.
-- Pass `--test` to upload to TestPyPI instead of production PyPI.
+- Uses `uv` for building and publishing.
