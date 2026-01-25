@@ -66,19 +66,20 @@ def resolve_doi(doi: str) -> str:
     return resp.text
 
 
-def search_crossref(query: str) -> str:
-    """Search Crossref and return the DOI of the first result.
+def search_crossref(query: str, max_results: int = 1) -> list[str]:
+    """Search Crossref and return up to max_results DOIs.
 
     Raises ResolverError on non-200 responses or empty results.
     """
     headers = {"User-Agent": get_user_agent()}
-    resp = requests.get(CROSSREF_API_URL, params={"query": query}, headers=headers)
+    params = {"query": query, "rows": max_results}
+    resp = requests.get(CROSSREF_API_URL, params=params, headers=headers)
     if resp.status_code != 200:
         raise ResolverError(f"Crossref search failed: HTTP {resp.status_code}")
     items = resp.json()["message"]["items"]
     if not items:
         raise ResolverError(f"No results found for query: '{query}'")
-    return items[0]["DOI"]
+    return [item["DOI"] for item in items[:max_results]]
 
 
 def resolve(query: str) -> str:
@@ -91,5 +92,5 @@ def resolve(query: str) -> str:
     query = normalize_doi_input(query)
     if is_doi(query):
         return resolve_doi(query)
-    doi = search_crossref(query)
-    return resolve_doi(doi)
+    dois = search_crossref(query)
+    return resolve_doi(dois[0])

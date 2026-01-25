@@ -120,7 +120,7 @@ class TestSearchCrossref:
     """Tests for the Crossref search API."""
 
     @patch("fetchbib.resolver.requests.get")
-    def test_extracts_doi_from_first_result(self, mock_get):
+    def test_returns_list_of_dois(self, mock_get):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {
@@ -133,7 +133,46 @@ class TestSearchCrossref:
         }
         mock_get.return_value = mock_resp
 
-        assert search_crossref(SEARCH_QUERY_A) == DOI_A
+        result = search_crossref(SEARCH_QUERY_A)
+        assert result == [DOI_A]
+
+    @patch("fetchbib.resolver.requests.get")
+    def test_max_results_parameter(self, mock_get):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "message": {
+                "items": [
+                    {"DOI": DOI_A},
+                    {"DOI": "10.9999/second"},
+                    {"DOI": "10.9999/third"},
+                ]
+            }
+        }
+        mock_get.return_value = mock_resp
+
+        result = search_crossref(SEARCH_QUERY_A, max_results=3)
+        assert result == [DOI_A, "10.9999/second", "10.9999/third"]
+        # Verify rows parameter was passed
+        call_kwargs = mock_get.call_args
+        params = call_kwargs.kwargs.get("params") or call_kwargs[1].get("params", {})
+        assert params["rows"] == 3
+
+    @patch("fetchbib.resolver.requests.get")
+    def test_returns_fewer_if_crossref_has_fewer(self, mock_get):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "message": {
+                "items": [
+                    {"DOI": DOI_A},
+                ]
+            }
+        }
+        mock_get.return_value = mock_resp
+
+        result = search_crossref(SEARCH_QUERY_A, max_results=5)
+        assert result == [DOI_A]
 
     @patch("fetchbib.resolver.requests.get")
     def test_raises_on_empty_results(self, mock_get):
@@ -186,7 +225,7 @@ class TestResolve:
     @patch("fetchbib.resolver.resolve_doi")
     @patch("fetchbib.resolver.search_crossref")
     def test_routes_non_doi_through_search(self, mock_search, mock_resolve_doi):
-        mock_search.return_value = DOI_A
+        mock_search.return_value = [DOI_A]
         mock_resolve_doi.return_value = "@article{...}"
 
         resolve(SEARCH_QUERY_A)

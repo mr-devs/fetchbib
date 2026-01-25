@@ -145,21 +145,71 @@ class TestErrorHandling:
 
 
 # ---------------------------------------------------------------------------
-# Verbose mode
+# Max results
 # ---------------------------------------------------------------------------
 
 
-class TestVerbose:
-    """Tests for the --verbose flag."""
+class TestMaxResults:
+    """Tests for the --max-results flag."""
 
     @patch("fetchbib.cli.resolve_doi", return_value=RAW_BIBTEX_A)
-    @patch("fetchbib.cli.search_crossref", return_value=DOI_A)
-    def test_verbose_prints_search_mapping(self, mock_search, mock_resolve):
-        code, _, stderr = run_cli(["-v", SEARCH_QUERY_A])
+    @patch("fetchbib.cli.search_crossref", return_value=[DOI_A])
+    def test_default_returns_one_result(self, mock_search, mock_resolve):
+        code, stdout, _ = run_cli([SEARCH_QUERY_A])
 
-        assert SEARCH_QUERY_A in stderr
-        assert DOI_A in stderr
+        mock_search.assert_called_once_with(SEARCH_QUERY_A, 1)
+        assert mock_resolve.call_count == 1
         assert code == 0
+
+    @patch("fetchbib.cli.resolve_doi", return_value=RAW_BIBTEX_A)
+    @patch("fetchbib.cli.search_crossref", return_value=[DOI_A])
+    def test_n_1_returns_single_result(self, mock_search, mock_resolve):
+        code, stdout, _ = run_cli(["-n", "1", SEARCH_QUERY_A])
+
+        mock_search.assert_called_once_with(SEARCH_QUERY_A, 1)
+        mock_resolve.assert_called_once()
+        assert code == 0
+
+    def test_n_0_exits_with_code_2(self):
+        code, _, stderr = run_cli(["-n", "0", SEARCH_QUERY_A])
+
+        assert code == 2
+        assert "between 1 and 100" in stderr
+
+    def test_n_101_exits_with_code_2(self):
+        code, _, stderr = run_cli(["-n", "101", SEARCH_QUERY_A])
+
+        assert code == 2
+        assert "between 1 and 100" in stderr
+
+    def test_n_with_only_dois_exits_with_code_2(self):
+        code, _, stderr = run_cli(["-n", "5", DOI_A])
+
+        assert code == 2
+        assert "free-text" in stderr
+
+    @patch(
+        "fetchbib.cli.search_crossref", return_value=[DOI_A, "10.9999/broken", DOI_B]
+    )
+    @patch("fetchbib.cli.resolve_doi")
+    def test_partial_failure_returns_successful_results(
+        self, mock_resolve, mock_search
+    ):
+        """When one DOI fails, the others should still be returned."""
+        mock_resolve.side_effect = [
+            RAW_BIBTEX_A,
+            ResolverError("HTTP 500"),
+            RAW_BIBTEX_B,
+        ]
+
+        code, stdout, stderr = run_cli(["-n", "3", SEARCH_QUERY_A])
+
+        assert code == 0
+        assert "Key1" in stdout
+        assert "Key2" in stdout
+        assert "Warning" in stderr
+        assert "10.9999/broken" in stderr
+        assert "https://doi.org/10.9999/broken" in stderr
 
 
 # ---------------------------------------------------------------------------

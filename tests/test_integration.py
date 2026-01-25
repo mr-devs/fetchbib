@@ -25,8 +25,8 @@ class TestLiveResolution:
         assert "2024" in result
 
     def test_free_text_search(self):
-        doi = search_crossref(SEARCH_QUERY_A)
-        raw = resolve_doi(doi)
+        dois = search_crossref(SEARCH_QUERY_A)
+        raw = resolve_doi(dois[0])
         result = format_bibtex(raw)
         assert AUTHOR_A in result
 

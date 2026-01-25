@@ -50,10 +50,14 @@ Search by free text by including text between quotes:
 fbib "DeVerna Fact-checking information from large language models"
 ```
 
+> **Note**: Search works best with full paper titles (or partial titles with an author last name).
+> Use `-n` to return multiple results if needed.
+> See [Specify number of free-text matches](#specify-number-of-free-text-matches) section below.
+
 ## Usage
 
 ```
-fbib [-h] [-f FILE] [-o OUTPUT] [-a] [-v] [--config-email EMAIL]
+fbib [-h] [-f FILE] [-o OUTPUT] [-a] [-n MAX_RESULTS] [--config-email EMAIL]
      [inputs ...]
 ```
 
@@ -98,13 +102,13 @@ Append to an existing `.bib` file:
 fbib --append --output refs.bib 10.1093/jcmc/zmz022
 ```
 
-### Verbose mode
+### Specify number of free-text matches
 
-See which DOI was matched when searching by free text:
+Free-text searches return 1 result by default. Use `-n` to control the limit (1-100):
 
 ```bash
-fbib -v "DeVerna Fact-checking information from large language models"
-# stderr: Searching for: "DeVerna Fact-checking information from large language models" -> DOI: 10.1073/pnas.2322823121
+# Get 3 results (see the correct result in position #2)
+fbib -n 3 "Fact-checking information from large language models can decrease"
 ```
 
 ### Configure email (optional)

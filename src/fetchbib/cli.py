@@ -49,10 +49,11 @@ def main() -> None:
         help="Append to the output file instead of overwriting (requires --output)",
     )
     parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Print which DOI was selected for search queries",
+        "-n",
+        "--max-results",
+        type=int,
+        default=1,
+        help="Max results per free-text search (1-100, default: 1)",
     )
     parser.add_argument(
         "--config-email",
@@ -65,6 +66,10 @@ def main() -> None:
     # --append requires --output
     if args.append and not args.output:
         parser.error("--append requires --output")
+
+    # Validate --max-results range
+    if args.max_results < 1 or args.max_results > 100:
+        parser.error("--max-results must be between 1 and 100")
 
     # --config-email: save and exit immediately
     if args.config_email:
@@ -80,14 +85,20 @@ def main() -> None:
         )
         sys.exit(1)
 
+    # Check if -n was explicitly set but there are no free-text queries
+    max_results_explicitly_set = "-n" in sys.argv or "--max-results" in sys.argv
+    has_free_text = any(not is_doi(normalize_doi_input(q)) for q in queries)
+    if max_results_explicitly_set and not has_free_text:
+        parser.error("--max-results requires at least one free-text query")
+
     # Resolve each input
     results: list[str] = []
     had_error = False
 
     for query in queries:
         try:
-            bibtex = _resolve_single(query, verbose=args.verbose)
-            results.append(bibtex)
+            bibtex_entries = _resolve_single(query, max_results=args.max_results)
+            results.extend(bibtex_entries)
         except ResolverError as exc:
             print(f"Error resolving '{query}': {exc}", file=sys.stderr)
             had_error = True
@@ -141,17 +152,28 @@ def _split_and_strip(value: str) -> list[str]:
     return [part.strip() for part in value.split(",") if part.strip()]
 
 
-def _resolve_single(query: str, *, verbose: bool) -> str:
-    """Resolve a single query to formatted BibTeX."""
+def _resolve_single(query: str, *, max_results: int) -> list[str]:
+    """Resolve a single query to formatted BibTeX entries.
+
+    Returns a list with one entry for DOIs, or up to max_results for free-text.
+    For free-text searches, individual DOI failures are warned but don't stop
+    processing of other results.
+    """
     query = normalize_doi_input(query)
     if is_doi(query):
         raw = resolve_doi(query)
+        return [format_bibtex(raw)]
     else:
-        doi = search_crossref(query)
-        if verbose:
-            print(
-                f'Searching for: "{query}" -> DOI: {doi}',
-                file=sys.stderr,
-            )
-        raw = resolve_doi(doi)
-    return format_bibtex(raw)
+        dois = search_crossref(query, max_results)
+        results = []
+        for doi in dois:
+            try:
+                raw = resolve_doi(doi)
+                results.append(format_bibtex(raw))
+            except ResolverError as exc:
+                print(
+                    f"Warning: Could not fetch BibTeX for {doi} ({exc}). "
+                    f"Try: https://doi.org/{doi}",
+                    file=sys.stderr,
+                )
+        return results
