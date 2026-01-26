@@ -1,7 +1,7 @@
 # fetchbib
 
 A command-line tool to resolve DOIs and free-text search queries into formatted BibTeX entries.
-Powered by [doi.org](https://www.doi.org/) and the [Crossref API](https://api.crossref.org/).
+Powered by [doi.org](https://www.doi.org/), [arXiv](https://arxiv.org/), and the [Crossref API](https://api.crossref.org/).
 
 ## Installation
 
@@ -21,11 +21,12 @@ Requires Python 3.9+.
 
 ## Quick start
 
-Fetch BibTeX by DOI (bare or full URL):
+Fetch BibTeX by DOI (bare or full URL, including arXiv):
 
 ```bash
 fbib 10.1073/pnas.2322823121
 fbib https://doi.org/10.1073/pnas.2322823121
+fbib 10.48550/arXiv.2410.21554
 ```
 
 ```bibtex
@@ -57,7 +58,8 @@ fbib "DeVerna Fact-checking information from large language models"
 ## Usage
 
 ```
-fbib [-h] [-f FILE] [-o OUTPUT] [-a] [-n MAX_RESULTS] [--config-email EMAIL]
+fbib [-h] [-f FILE] [-o OUTPUT] [-a] [-n MAX_RESULTS]
+     [--config-email EMAIL] [--config-protect-titles]
      [inputs ...]
 ```
 
@@ -111,15 +113,27 @@ Free-text searches return 1 result by default. Use `-n` to control the limit (1-
 fbib -n 3 "Fact-checking information from large language models can decrease"
 ```
 
-### Configure email (optional)
+## Configuration
 
-Crossref gives better rate limits to requests that include a contact email. Set yours once and it will be used for all future requests:
+Settings are stored in `~/.config/fetchbib/config.json` and persist across sessions.
+
+### Email
+
+Crossref gives better rate limits to requests that include a contact email. Set yours once:
 
 ```bash
 fbib --config-email you@example.com
 ```
 
-The email is stored in `~/.config/fetchbib/config.json`. If not set, a default placeholder is used.
+### Protect titles
+
+BibTeX processors may change title capitalization. Enable title protection to wrap titles in double braces, preserving the original case:
+
+```bash
+fbib --config-protect-titles
+```
+
+This transforms `title = {A {GPU} Study}` into `title = {{A GPU Study}}`. Run again to toggle off.
 
 ## Development
 
