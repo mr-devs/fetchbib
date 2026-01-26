@@ -134,7 +134,12 @@ BibTeX processors may change title capitalization. Enable title protection to wr
 fbib --config-protect-titles
 ```
 
-This transforms `title = {A {GPU} Study}` into `title = {{A GPU Study}}`. Run again to toggle off.
+This transforms the below:
+
+- `title = {A {GPU} Study}` becomes `title = {{A GPU Study}}` and
+- `title = {An Important Study}` becomes `title = {{An Important Study}}`.
+
+Run again to toggle off.
 
 ### Exclude ISSN
 
