@@ -327,3 +327,109 @@ class TestConfigProtectTitles:
 
         assert code == 0
         assert "title = {{A GPU Test}}" in stdout
+
+
+# ---------------------------------------------------------------------------
+# Config exclude-issn
+# ---------------------------------------------------------------------------
+
+
+class TestConfigExcludeIssn:
+    """Tests for --config-exclude-issn toggle."""
+
+    def test_config_exclude_issn_toggles_false_to_true(self, tmp_path):
+        config_file = tmp_path / "config.json"
+        with (
+            patch("fetchbib.config.CONFIG_FILE", config_file),
+            patch("fetchbib.config.CONFIG_DIR", tmp_path),
+        ):
+            code, stdout, _ = run_cli(["--config-exclude-issn"])
+
+        assert code == 0
+        assert "enabled" in stdout.lower()
+        saved = json.loads(config_file.read_text())
+        assert saved["exclude_issn"] is True
+
+    def test_config_exclude_issn_toggles_true_to_false(self, tmp_path):
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"exclude_issn": True}))
+        with (
+            patch("fetchbib.config.CONFIG_FILE", config_file),
+            patch("fetchbib.config.CONFIG_DIR", tmp_path),
+        ):
+            code, stdout, _ = run_cli(["--config-exclude-issn"])
+
+        assert code == 0
+        assert "disabled" in stdout.lower()
+        saved = json.loads(config_file.read_text())
+        assert saved["exclude_issn"] is False
+
+    @patch("fetchbib.cli.resolve_doi")
+    def test_exclude_issn_applied_to_output(self, mock_resolve, tmp_path):
+        mock_resolve.return_value = (
+            "@article{Key,title={Test},issn={1234-5678},author={Smith}}"
+        )
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"exclude_issn": True}))
+
+        with (
+            patch("fetchbib.config.CONFIG_FILE", config_file),
+            patch("fetchbib.config.CONFIG_DIR", tmp_path),
+        ):
+            code, stdout, _ = run_cli(["10.1234/test"])
+
+        assert code == 0
+        assert "issn" not in stdout.lower()
+
+
+# ---------------------------------------------------------------------------
+# Config exclude-doi
+# ---------------------------------------------------------------------------
+
+
+class TestConfigExcludeDoi:
+    """Tests for --config-exclude-doi toggle."""
+
+    def test_config_exclude_doi_toggles_false_to_true(self, tmp_path):
+        config_file = tmp_path / "config.json"
+        with (
+            patch("fetchbib.config.CONFIG_FILE", config_file),
+            patch("fetchbib.config.CONFIG_DIR", tmp_path),
+        ):
+            code, stdout, _ = run_cli(["--config-exclude-doi"])
+
+        assert code == 0
+        assert "enabled" in stdout.lower()
+        saved = json.loads(config_file.read_text())
+        assert saved["exclude_doi"] is True
+
+    def test_config_exclude_doi_toggles_true_to_false(self, tmp_path):
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"exclude_doi": True}))
+        with (
+            patch("fetchbib.config.CONFIG_FILE", config_file),
+            patch("fetchbib.config.CONFIG_DIR", tmp_path),
+        ):
+            code, stdout, _ = run_cli(["--config-exclude-doi"])
+
+        assert code == 0
+        assert "disabled" in stdout.lower()
+        saved = json.loads(config_file.read_text())
+        assert saved["exclude_doi"] is False
+
+    @patch("fetchbib.cli.resolve_doi")
+    def test_exclude_doi_applied_to_output(self, mock_resolve, tmp_path):
+        mock_resolve.return_value = (
+            "@article{Key,title={Test},doi={10.1234/example},author={Smith}}"
+        )
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"exclude_doi": True}))
+
+        with (
+            patch("fetchbib.config.CONFIG_FILE", config_file),
+            patch("fetchbib.config.CONFIG_DIR", tmp_path),
+        ):
+            code, stdout, _ = run_cli(["10.1234/test"])
+
+        assert code == 0
+        assert "doi" not in stdout.lower()

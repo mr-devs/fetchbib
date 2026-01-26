@@ -38,6 +38,32 @@ def set_protect_titles(enabled: bool) -> None:
     _write_config(cfg)
 
 
+def get_exclude_issn() -> bool:
+    """Return True if ISSN should be excluded from BibTeX entries."""
+    cfg = _read_config()
+    return cfg.get("exclude_issn", False)
+
+
+def set_exclude_issn(enabled: bool) -> None:
+    """Persist the exclude_issn setting."""
+    cfg = _read_config()
+    cfg["exclude_issn"] = enabled
+    _write_config(cfg)
+
+
+def get_exclude_doi() -> bool:
+    """Return True if DOI should be excluded from BibTeX entries."""
+    cfg = _read_config()
+    return cfg.get("exclude_doi", False)
+
+
+def set_exclude_doi(enabled: bool) -> None:
+    """Persist the exclude_doi setting."""
+    cfg = _read_config()
+    cfg["exclude_doi"] = enabled
+    _write_config(cfg)
+
+
 def _read_config() -> dict:
     """Read the config file, returning an empty dict if it doesn't exist."""
     if not CONFIG_FILE.exists():

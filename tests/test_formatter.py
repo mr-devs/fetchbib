@@ -81,3 +81,50 @@ class TestProtectTitlesOption:
         raw = "@article{Key,title={Test},author={Smith, {Jr.}}}"
         result = format_bibtex(raw, protect_titles=True)
         assert "author = {Smith, {Jr.}}" in result
+
+
+class TestExcludeIssn:
+    """Tests for format_bibtex() with exclude_issn=True."""
+
+    def test_issn_excluded(self):
+        """ISSN field is removed when exclude_issn is True."""
+        raw = "@article{Key,title={Test},issn={1234-5678},author={Smith}}"
+        result = format_bibtex(raw, exclude_issn=True)
+        assert "issn" not in result.lower()
+
+    def test_issn_included_by_default(self):
+        """ISSN field is kept by default."""
+        raw = "@article{Key,title={Test},issn={1234-5678},author={Smith}}"
+        result = format_bibtex(raw)
+        assert "issn = {1234-5678}" in result
+
+    def test_other_fields_unchanged(self):
+        """Non-ISSN fields are not affected by exclude_issn."""
+        raw = "@article{Key,title={Test},issn={1234-5678},author={Smith}}"
+        result = format_bibtex(raw, exclude_issn=True)
+        assert "author = {Smith}" in result
+        assert "title = {Test}" in result
+
+
+class TestExcludeDoi:
+    """Tests for format_bibtex() with exclude_doi=True."""
+
+    def test_doi_excluded(self):
+        """DOI field is removed when exclude_doi is True."""
+        raw = "@article{Key,title={Test},doi={10.1234/example},author={Smith}}"
+        result = format_bibtex(raw, exclude_doi=True)
+        assert "doi" not in result.lower()
+
+    def test_doi_included_by_default(self):
+        """DOI field is kept by default."""
+        raw = "@article{Key,title={Test},doi={10.1234/example},author={Smith}}"
+        result = format_bibtex(raw)
+        assert "doi = {10.1234/example}" in result
+
+    def test_other_fields_unchanged(self):
+        """Non-DOI fields are not affected by exclude_doi."""
+        raw = "@article{Key,title={Test},doi={10.1234/example},url={http://example.com},author={Smith}}"
+        result = format_bibtex(raw, exclude_doi=True)
+        assert "author = {Smith}" in result
+        assert "title = {Test}" in result
+        assert "url = {http://example.com}" in result

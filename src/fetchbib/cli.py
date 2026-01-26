@@ -68,6 +68,16 @@ def main() -> None:
         action="store_true",
         help="Toggle double-bracing of titles and exit",
     )
+    parser.add_argument(
+        "--config-exclude-issn",
+        action="store_true",
+        help="Toggle exclusion of ISSN from BibTeX entries and exit",
+    )
+    parser.add_argument(
+        "--config-exclude-doi",
+        action="store_true",
+        help="Toggle exclusion of DOI from BibTeX entries and exit",
+    )
 
     args = parser.parse_args()
 
@@ -91,6 +101,22 @@ def main() -> None:
         config.set_protect_titles(new_value)
         state = "enabled (double-braced titles)" if new_value else "disabled"
         print(f"Title protection {state}.")
+        sys.exit(0)
+
+    # --config-exclude-issn: toggle and exit immediately
+    if args.config_exclude_issn:
+        new_value = not config.get_exclude_issn()
+        config.set_exclude_issn(new_value)
+        state = "enabled (ISSN excluded)" if new_value else "disabled"
+        print(f"ISSN exclusion {state}.")
+        sys.exit(0)
+
+    # --config-exclude-doi: toggle and exit immediately
+    if args.config_exclude_doi:
+        new_value = not config.get_exclude_doi()
+        config.set_exclude_doi(new_value)
+        state = "enabled (DOI excluded)" if new_value else "disabled"
+        print(f"DOI exclusion {state}.")
         sys.exit(0)
 
     # Collect inputs
@@ -177,20 +203,36 @@ def _resolve_single(query: str, *, max_results: int) -> list[str]:
     processing of other results.
     """
     protect_titles = config.get_protect_titles()
+    exclude_issn = config.get_exclude_issn()
+    exclude_doi = config.get_exclude_doi()
     query = normalize_doi_input(query)
     if is_doi(query):
         if is_arxiv_doi(query):
             raw = resolve_arxiv(extract_arxiv_id(query))
         else:
             raw = resolve_doi(query)
-        return [format_bibtex(raw, protect_titles=protect_titles)]
+        return [
+            format_bibtex(
+                raw,
+                protect_titles=protect_titles,
+                exclude_issn=exclude_issn,
+                exclude_doi=exclude_doi,
+            )
+        ]
     else:
         dois = search_crossref(query, max_results)
         results = []
         for doi in dois:
             try:
                 raw = resolve_doi(doi)
-                results.append(format_bibtex(raw, protect_titles=protect_titles))
+                results.append(
+                    format_bibtex(
+                        raw,
+                        protect_titles=protect_titles,
+                        exclude_issn=exclude_issn,
+                        exclude_doi=exclude_doi,
+                    )
+                )
             except ResolverError as exc:
                 print(
                     f"Warning: Could not fetch BibTeX for {doi} ({exc}). "

@@ -60,6 +60,7 @@ fbib "DeVerna Fact-checking information from large language models"
 ```
 fbib [-h] [-f FILE] [-o OUTPUT] [-a] [-n MAX_RESULTS]
      [--config-email EMAIL] [--config-protect-titles]
+     [--config-exclude-issn] [--config-exclude-doi]
      [inputs ...]
 ```
 
@@ -134,6 +135,26 @@ fbib --config-protect-titles
 ```
 
 This transforms `title = {A {GPU} Study}` into `title = {{A GPU Study}}`. Run again to toggle off.
+
+### Exclude ISSN
+
+Remove the ISSN field from returned BibTeX entries:
+
+```bash
+fbib --config-exclude-issn
+```
+
+Run again to toggle off.
+
+### Exclude DOI
+
+Remove the DOI field from returned BibTeX entries (the DOI is already included in the URL field):
+
+```bash
+fbib --config-exclude-doi
+```
+
+Run again to toggle off.
 
 ## Development
 

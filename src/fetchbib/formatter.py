@@ -5,7 +5,13 @@ with alphabetized fields, 2-space indentation, and proper line breaks.
 """
 
 
-def format_bibtex(raw: str, *, protect_titles: bool = False) -> str:
+def format_bibtex(
+    raw: str,
+    *,
+    protect_titles: bool = False,
+    exclude_issn: bool = False,
+    exclude_doi: bool = False,
+) -> str:
     """Format a raw BibTeX entry into a clean, readable string.
 
     Rules:
@@ -18,6 +24,10 @@ def format_bibtex(raw: str, *, protect_titles: bool = False) -> str:
     If protect_titles is True, the title field is transformed to use
     double braces (preserving case) with inner braces removed.
 
+    If exclude_issn is True, the ISSN field is removed from the output.
+
+    If exclude_doi is True, the DOI field is removed from the output.
+
     Commas inside braced values (e.g. author names) are preserved — only
     top-level commas are treated as field separators.
     """
@@ -28,6 +38,12 @@ def format_bibtex(raw: str, *, protect_titles: bool = False) -> str:
         fields = [
             (k, _protect_title(v) if k.lower() == "title" else v) for k, v in fields
         ]
+
+    if exclude_issn:
+        fields = [(k, v) for k, v in fields if k.lower() != "issn"]
+
+    if exclude_doi:
+        fields = [(k, v) for k, v in fields if k.lower() != "doi"]
 
     fields.sort(key=lambda kv: kv[0].lower())
 
