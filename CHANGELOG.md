@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-01-25
+
+### Added
+
+- `--config-exclude-issn` flag to toggle exclusion of ISSN from BibTeX entries
+- `--config-exclude-doi` flag to toggle exclusion of DOI from BibTeX entries (already included in URL)
+
 ## [0.3.0] - 2025-01-25
 
 ### Added
