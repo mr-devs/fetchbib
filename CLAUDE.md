@@ -82,6 +82,20 @@ This project follows **test-driven development (TDD)**:
   - `1` - Runtime error (resolution failure, file not found, no inputs)
   - `2` - Argument error (invalid flag combinations, missing required args)
 
+## Specifications
+
+The `specs/` directory contains detailed specifications for each module (not tracked in git):
+
+| Spec File | Source File | Purpose |
+|-----------|-------------|---------|
+| `specs/formatter.md` | `formatter.py` | BibTeX formatting rules and options |
+| `specs/resolver.md` | `resolver.py` | DOI resolution, arXiv support, Crossref search |
+| `specs/cli.md` | `cli.py` | CLI arguments, flags, and behavior |
+| `specs/integration.md` | `test_integration.py` | Live API test cases |
+| `specs/packaging.md` | `pyproject.toml` | Build configuration and project metadata |
+
+**When modifying a module, update the corresponding spec file** to keep documentation in sync with the implementation.
+
 ## Git Workflow
 
 - Write clear, descriptive commit messages
