@@ -153,7 +153,7 @@ Run again to toggle off.
 
 ### Exclude DOI
 
-Remove the DOI field from returned BibTeX entries (the DOI is already included in the URL field):
+Remove the DOI field from returned BibTeX entries (the DOI is typically already included in the URL field):
 
 ```bash
 fbib --config-exclude-doi
