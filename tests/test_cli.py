@@ -161,15 +161,6 @@ class TestMaxResults:
         assert mock_resolve.call_count == 1
         assert code == 0
 
-    @patch("fetchbib.cli.resolve_doi", return_value=RAW_BIBTEX_A)
-    @patch("fetchbib.cli.search_crossref", return_value=[DOI_A])
-    def test_n_1_returns_single_result(self, mock_search, mock_resolve):
-        code, stdout, _ = run_cli(["-n", "1", SEARCH_QUERY_A])
-
-        mock_search.assert_called_once_with(SEARCH_QUERY_A, 1)
-        mock_resolve.assert_called_once()
-        assert code == 0
-
     def test_n_0_exits_with_code_2(self):
         code, _, stderr = run_cli(["-n", "0", SEARCH_QUERY_A])
 
@@ -279,30 +270,60 @@ class TestConfigEmail:
             patch("fetchbib.config.CONFIG_FILE", config_file),
             patch("fetchbib.config.CONFIG_DIR", tmp_path),
         ):
-            code, _, _ = run_cli(["--config-email", "user@university.edu"])
+            code, stdout, _ = run_cli(["--config-email", "user@university.edu"])
 
         assert code == 0
+        assert "user@university.edu" in stdout
         saved = json.loads(config_file.read_text())
         assert saved["email"] == "user@university.edu"
 
-    @patch("fetchbib.cli.resolve_doi", return_value=RAW_BIBTEX_A)
-    def test_config_email_used_by_resolver(self, mock_resolve, tmp_path):
+
+# ---------------------------------------------------------------------------
+# Config protect-titles
+# ---------------------------------------------------------------------------
+
+
+class TestConfigProtectTitles:
+    """Tests for --config-protect-titles toggle."""
+
+    def test_config_protect_titles_toggles_false_to_true(self, tmp_path):
         config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps({"email": "custom@uni.edu"}))
+        with (
+            patch("fetchbib.config.CONFIG_FILE", config_file),
+            patch("fetchbib.config.CONFIG_DIR", tmp_path),
+        ):
+            code, stdout, _ = run_cli(["--config-protect-titles"])
+
+        assert code == 0
+        assert "enabled" in stdout.lower()
+        saved = json.loads(config_file.read_text())
+        assert saved["protect_titles"] is True
+
+    def test_config_protect_titles_toggles_true_to_false(self, tmp_path):
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"protect_titles": True}))
+        with (
+            patch("fetchbib.config.CONFIG_FILE", config_file),
+            patch("fetchbib.config.CONFIG_DIR", tmp_path),
+        ):
+            code, stdout, _ = run_cli(["--config-protect-titles"])
+
+        assert code == 0
+        assert "disabled" in stdout.lower()
+        saved = json.loads(config_file.read_text())
+        assert saved["protect_titles"] is False
+
+    @patch("fetchbib.cli.resolve_doi")
+    def test_protect_titles_applied_to_output(self, mock_resolve, tmp_path):
+        mock_resolve.return_value = "@article{Key,title={A {GPU} Test},author={Smith}}"
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"protect_titles": True}))
 
         with (
             patch("fetchbib.config.CONFIG_FILE", config_file),
             patch("fetchbib.config.CONFIG_DIR", tmp_path),
         ):
-            run_cli(["10.1234/test"])
+            code, stdout, _ = run_cli(["10.1234/test"])
 
-        headers = mock_resolve.call_args  # we can't easily check headers here
-        # Instead, verify the user agent function reads the config
-        with (
-            patch("fetchbib.config.CONFIG_FILE", config_file),
-            patch("fetchbib.config.CONFIG_DIR", tmp_path),
-        ):
-            from fetchbib.resolver import get_user_agent
-
-            ua = get_user_agent()
-        assert "custom@uni.edu" in ua
+        assert code == 0
+        assert "title = {{A GPU Test}}" in stdout

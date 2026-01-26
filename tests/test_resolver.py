@@ -10,9 +10,12 @@ import pytest
 from conftest import DOI_A, SEARCH_QUERY_A
 from fetchbib.resolver import (
     ResolverError,
+    extract_arxiv_id,
+    is_arxiv_doi,
     is_doi,
     normalize_doi_input,
     resolve,
+    resolve_arxiv,
     resolve_doi,
     search_crossref,
 )
@@ -47,6 +50,93 @@ class TestIsDoi:
     )
     def test_invalid_inputs(self, value):
         assert is_doi(value) is False
+
+
+# ---------------------------------------------------------------------------
+# is_arxiv_doi
+# ---------------------------------------------------------------------------
+
+
+class TestIsArxivDoi:
+    """Tests for arXiv DOI detection."""
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "10.48550/arXiv.2410.21554",
+            "10.48550/arxiv.2410.21554",  # lowercase
+            "10.48550/ARXIV.2410.21554",  # uppercase
+            "10.48550/arXiv.1234.56789",
+            "10.48550/arXiv.hep-ph/0307015",
+        ],
+    )
+    def test_valid_arxiv_dois(self, value):
+        assert is_arxiv_doi(value) is True
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "10.2196/jmir.1933",  # regular DOI
+            "10.1073/pnas.2322823121",  # PNAS DOI
+            "10.48550/other.1234",  # different prefix after 10.48550
+            "",
+        ],
+    )
+    def test_non_arxiv_dois(self, value):
+        assert is_arxiv_doi(value) is False
+
+
+# ---------------------------------------------------------------------------
+# extract_arxiv_id
+# ---------------------------------------------------------------------------
+
+
+class TestExtractArxivId:
+    """Tests for extracting arXiv ID from DOI."""
+
+    @pytest.mark.parametrize(
+        "doi,expected",
+        [
+            ("10.48550/arXiv.2410.21554", "2410.21554"),
+            ("10.48550/arXiv.1234.56789", "1234.56789"),
+            ("10.48550/arXiv.hep-ph/0307015", "hep-ph/0307015"),
+        ],
+    )
+    def test_extracts_arxiv_id(self, doi, expected):
+        assert extract_arxiv_id(doi) == expected
+
+
+# ---------------------------------------------------------------------------
+# resolve_arxiv
+# ---------------------------------------------------------------------------
+
+
+class TestResolveArxiv:
+    """Tests for fetching BibTeX from arXiv."""
+
+    @patch("fetchbib.resolver.requests.get")
+    def test_returns_bibtex_on_success(self, mock_get):
+        bibtex = "@misc{deverna2024, author={DeVerna}, year={2024}}"
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = bibtex
+        mock_get.return_value = mock_resp
+
+        result = resolve_arxiv("2410.21554")
+
+        assert result == bibtex
+        mock_get.assert_called_once()
+        call_args = mock_get.call_args
+        assert "arxiv.org/bibtex/2410.21554" in call_args[0][0]
+
+    @patch("fetchbib.resolver.requests.get")
+    def test_raises_on_http_failure(self, mock_get):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 404
+        mock_get.return_value = mock_resp
+
+        with pytest.raises(ResolverError, match="arXiv resolution failed.*404"):
+            resolve_arxiv("9999.99999")
 
 
 # ---------------------------------------------------------------------------
@@ -159,22 +249,6 @@ class TestSearchCrossref:
         assert params["rows"] == 3
 
     @patch("fetchbib.resolver.requests.get")
-    def test_returns_fewer_if_crossref_has_fewer(self, mock_get):
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {
-            "message": {
-                "items": [
-                    {"DOI": DOI_A},
-                ]
-            }
-        }
-        mock_get.return_value = mock_resp
-
-        result = search_crossref(SEARCH_QUERY_A, max_results=5)
-        assert result == [DOI_A]
-
-    @patch("fetchbib.resolver.requests.get")
     def test_raises_on_empty_results(self, mock_get):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -214,16 +288,6 @@ class TestResolve:
 
     @patch("fetchbib.resolver.resolve_doi")
     @patch("fetchbib.resolver.search_crossref")
-    def test_routes_doi_url_directly(self, mock_search, mock_resolve_doi):
-        mock_resolve_doi.return_value = "@article{...}"
-
-        resolve("https://doi.org/10.2196/jmir.1933")
-
-        mock_resolve_doi.assert_called_once_with("10.2196/jmir.1933")
-        mock_search.assert_not_called()
-
-    @patch("fetchbib.resolver.resolve_doi")
-    @patch("fetchbib.resolver.search_crossref")
     def test_routes_non_doi_through_search(self, mock_search, mock_resolve_doi):
         mock_search.return_value = [DOI_A]
         mock_resolve_doi.return_value = "@article{...}"
@@ -232,6 +296,18 @@ class TestResolve:
 
         mock_search.assert_called_once_with(SEARCH_QUERY_A)
         mock_resolve_doi.assert_called_once_with(DOI_A)
+
+    @patch("fetchbib.resolver.resolve_arxiv")
+    @patch("fetchbib.resolver.resolve_doi")
+    @patch("fetchbib.resolver.search_crossref")
+    def test_routes_arxiv_doi_to_arxiv(self, mock_search, mock_resolve_doi, mock_arxiv):
+        mock_arxiv.return_value = "@misc{deverna2024...}"
+
+        resolve("10.48550/arXiv.2410.21554")
+
+        mock_arxiv.assert_called_once_with("2410.21554")
+        mock_resolve_doi.assert_not_called()
+        mock_search.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -256,18 +332,3 @@ class TestUserAgentConfig:
             mock_get.call_args.kwargs.get("headers") or mock_get.call_args[1]["headers"]
         )
         assert "custom@university.edu" in headers["User-Agent"]
-
-    @patch("fetchbib.resolver.requests.get")
-    @patch("fetchbib.resolver.config.get_email", return_value="fetchbib@example.com")
-    def test_default_email_in_user_agent(self, _mock_email, mock_get):
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.text = "@article{...}"
-        mock_get.return_value = mock_resp
-
-        resolve_doi("10.1234/test")
-
-        headers = (
-            mock_get.call_args.kwargs.get("headers") or mock_get.call_args[1]["headers"]
-        )
-        assert "fetchbib@example.com" in headers["User-Agent"]

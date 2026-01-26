@@ -25,6 +25,19 @@ def set_email(email: str) -> None:
     _write_config(cfg)
 
 
+def get_protect_titles() -> bool:
+    """Return True if titles should be double-braced."""
+    cfg = _read_config()
+    return cfg.get("protect_titles", False)
+
+
+def set_protect_titles(enabled: bool) -> None:
+    """Persist the protect_titles setting."""
+    cfg = _read_config()
+    cfg["protect_titles"] = enabled
+    _write_config(cfg)
+
+
 def _read_config() -> dict:
     """Read the config file, returning an empty dict if it doesn't exist."""
     if not CONFIG_FILE.exists():

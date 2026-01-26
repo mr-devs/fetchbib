@@ -5,7 +5,7 @@ with alphabetized fields, 2-space indentation, and proper line breaks.
 """
 
 
-def format_bibtex(raw: str) -> str:
+def format_bibtex(raw: str, *, protect_titles: bool = False) -> str:
     """Format a raw BibTeX entry into a clean, readable string.
 
     Rules:
@@ -15,15 +15,43 @@ def format_bibtex(raw: str) -> str:
         - Closing brace is on its own line.
         - Trailing commas are removed.
 
+    If protect_titles is True, the title field is transformed to use
+    double braces (preserving case) with inner braces removed.
+
     Commas inside braced values (e.g. author names) are preserved — only
     top-level commas are treated as field separators.
     """
     header, fields_block = _split_header(raw.strip())
     fields = _parse_fields(fields_block)
+
+    if protect_titles:
+        fields = [
+            (k, _protect_title(v) if k.lower() == "title" else v) for k, v in fields
+        ]
+
     fields.sort(key=lambda kv: kv[0].lower())
 
     field_lines = [f"  {key} = {value}" for key, value in fields]
     return header + "\n" + ",\n".join(field_lines) + "\n}"
+
+
+def _protect_title(value: str) -> str:
+    """Transform a braced title value to use double braces.
+
+    Removes inner braces and wraps the content in double braces.
+    Example: {This is {THE} title} -> {{This is THE title}}
+    """
+    # Strip outer braces if present
+    stripped = value.strip()
+    if stripped.startswith("{") and stripped.endswith("}"):
+        inner = stripped[1:-1]
+    else:
+        inner = stripped
+
+    # Remove all inner braces
+    content = inner.replace("{", "").replace("}", "")
+
+    return "{{" + content + "}}"
 
 
 def _split_header(entry: str) -> tuple[str, str]:

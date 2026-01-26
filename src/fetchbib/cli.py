@@ -10,8 +10,11 @@ from fetchbib import config
 from fetchbib.formatter import format_bibtex
 from fetchbib.resolver import (
     ResolverError,
+    extract_arxiv_id,
+    is_arxiv_doi,
     is_doi,
     normalize_doi_input,
+    resolve_arxiv,
     resolve_doi,
     search_crossref,
 )
@@ -60,6 +63,11 @@ def main() -> None:
         metavar="EMAIL",
         help="Set the email used in the User-Agent header and exit",
     )
+    parser.add_argument(
+        "--config-protect-titles",
+        action="store_true",
+        help="Toggle double-bracing of titles and exit",
+    )
 
     args = parser.parse_args()
 
@@ -74,6 +82,15 @@ def main() -> None:
     # --config-email: save and exit immediately
     if args.config_email:
         config.set_email(args.config_email)
+        print(f"Email set to: {args.config_email}")
+        sys.exit(0)
+
+    # --config-protect-titles: toggle and exit immediately
+    if args.config_protect_titles:
+        new_value = not config.get_protect_titles()
+        config.set_protect_titles(new_value)
+        state = "enabled (double-braced titles)" if new_value else "disabled"
+        print(f"Title protection {state}.")
         sys.exit(0)
 
     # Collect inputs
@@ -159,17 +176,21 @@ def _resolve_single(query: str, *, max_results: int) -> list[str]:
     For free-text searches, individual DOI failures are warned but don't stop
     processing of other results.
     """
+    protect_titles = config.get_protect_titles()
     query = normalize_doi_input(query)
     if is_doi(query):
-        raw = resolve_doi(query)
-        return [format_bibtex(raw)]
+        if is_arxiv_doi(query):
+            raw = resolve_arxiv(extract_arxiv_id(query))
+        else:
+            raw = resolve_doi(query)
+        return [format_bibtex(raw, protect_titles=protect_titles)]
     else:
         dois = search_crossref(query, max_results)
         results = []
         for doi in dois:
             try:
                 raw = resolve_doi(doi)
-                results.append(format_bibtex(raw))
+                results.append(format_bibtex(raw, protect_titles=protect_titles))
             except ResolverError as exc:
                 print(
                     f"Warning: Could not fetch BibTeX for {doi} ({exc}). "
