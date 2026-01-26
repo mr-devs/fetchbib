@@ -73,7 +73,7 @@ You'll be prompted for your PyPI API token (or set it as an environment variable
 ### 5. Verify the Release
 
 ```bash
-pip install --upgrade fetchbib
+pip install --upgrade --no-cache-dir fetchbib
 fbib --help
 ```
 
