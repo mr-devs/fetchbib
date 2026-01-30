@@ -3,23 +3,16 @@
 A command-line tool to resolve DOIs and free-text search queries into formatted BibTeX entries.
 Powered by [doi.org](https://www.doi.org/), [arXiv](https://arxiv.org/), and the [OpenAlex API](https://openalex.org/).
 
-## Installation
+## Features
 
-### `pip`
+- Resolve DOIs to formatted BibTeX (bare DOIs or full URLs)
+- Search by paper title via OpenAlex API
+- Native arXiv support (arXiv DOIs route to arxiv.org)
+- Batch processing from file or command line
+- Write output to file (overwrite or append)
+- Configurable: exclude ISSN/DOI fields, protect title capitalization
 
-```bash
-pip install fetchbib
-```
-
-### `uv`
-
-```bash
-uv tool install fetchbib
-```
-
-Requires Python 3.9+.
-
-## Quick start
+## Quick Start
 
 Fetch BibTeX by DOI (bare or full URL, including arXiv):
 
@@ -54,6 +47,22 @@ fbib "Fact-checking information from large language models can decrease headline
 > **Note**: OpenAlex searches titles and abstracts. Full or partial paper titles work best.
 > Use `-n` to return multiple results if needed.
 > See [Specify number of free-text matches](#specify-number-of-free-text-matches) section below.
+
+## Installation
+
+### `pip`
+
+```bash
+pip install fetchbib
+```
+
+### `uv`
+
+```bash
+uv tool install fetchbib
+```
+
+Requires Python 3.9+.
 
 ## Usage
 
