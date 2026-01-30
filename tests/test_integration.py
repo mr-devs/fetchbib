@@ -10,13 +10,13 @@ import pytest
 
 from conftest import AUTHOR_A, DOI_A, SEARCH_QUERY_A
 from fetchbib.formatter import format_bibtex
-from fetchbib.resolver import resolve_doi, search_crossref
+from fetchbib.resolver import resolve_doi, search_openalex
 
 pytestmark = pytest.mark.integration
 
 
 class TestLiveResolution:
-    """End-to-end tests against doi.org and Crossref."""
+    """End-to-end tests against doi.org and OpenAlex."""
 
     def test_doi_resolution(self):
         raw = resolve_doi(DOI_A)
@@ -25,7 +25,7 @@ class TestLiveResolution:
         assert "2024" in result
 
     def test_free_text_search(self):
-        dois = search_crossref(SEARCH_QUERY_A)
+        dois = search_openalex(SEARCH_QUERY_A)
         raw = resolve_doi(dois[0])
         result = format_bibtex(raw)
         assert AUTHOR_A in result

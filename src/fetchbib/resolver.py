@@ -1,10 +1,11 @@
-"""DOI resolution and Crossref search.
+"""DOI resolution and OpenAlex search.
 
 Provides functions to check if a string is a DOI, resolve a DOI to BibTeX,
-search Crossref for a DOI, and an orchestrator that combines them.
+search OpenAlex for a DOI, and an orchestrator that combines them.
 """
 
 import re
+import sys
 
 import requests
 
@@ -19,14 +20,19 @@ DOI_URL_PREFIXES = (
 )
 
 DOI_BASE_URL = "https://doi.org/"
-CROSSREF_API_URL = "https://api.crossref.org/works"
+OPENALEX_API_URL = "https://api.openalex.org/works"
 
 ARXIV_DOI_PREFIX = "10.48550/arxiv."
 ARXIV_BIBTEX_URL = "https://arxiv.org/bibtex/"
 
+USER_AGENT = "fetchbib/1.0"
+
+# Track whether we've shown the API key warning this session
+_api_key_warning_shown = False
+
 
 class ResolverError(Exception):
-    """Raised when DOI resolution or Crossref search fails."""
+    """Raised when DOI resolution or OpenAlex search fails."""
 
 
 def normalize_doi_input(value: str) -> str:
@@ -56,12 +62,6 @@ def extract_arxiv_id(doi: str) -> str:
     return doi[len(ARXIV_DOI_PREFIX) :]
 
 
-def get_user_agent() -> str:
-    """Build the User-Agent string using the configured email."""
-    email = config.get_email()
-    return f"fetchbib/1.0 (mailto:{email})"
-
-
 def resolve_doi(doi: str) -> str:
     """Fetch BibTeX for a DOI from doi.org.
 
@@ -69,7 +69,7 @@ def resolve_doi(doi: str) -> str:
     """
     headers = {
         "Accept": "text/bibliography; style=bibtex",
-        "User-Agent": get_user_agent(),
+        "User-Agent": USER_AGENT,
     }
     resp = requests.get(f"{DOI_BASE_URL}{doi}", headers=headers)
     if resp.status_code != 200:
@@ -84,7 +84,7 @@ def resolve_arxiv(arxiv_id: str) -> str:
 
     Raises ResolverError on non-200 responses.
     """
-    headers = {"User-Agent": get_user_agent()}
+    headers = {"User-Agent": USER_AGENT}
     resp = requests.get(f"{ARXIV_BIBTEX_URL}{arxiv_id}", headers=headers)
     if resp.status_code != 200:
         raise ResolverError(
@@ -93,20 +93,49 @@ def resolve_arxiv(arxiv_id: str) -> str:
     return resp.text
 
 
-def search_crossref(query: str, max_results: int = 1) -> list[str]:
-    """Search Crossref and return up to max_results DOIs.
+def search_openalex(query: str, max_results: int = 1) -> list[str]:
+    """Search OpenAlex and return up to max_results DOIs.
 
     Raises ResolverError on non-200 responses or empty results.
+    Shows a warning to stderr if no API key is configured.
     """
-    headers = {"User-Agent": get_user_agent()}
-    params = {"query": query, "rows": max_results}
-    resp = requests.get(CROSSREF_API_URL, params=params, headers=headers)
+    api_key = config.get_openalex_api_key()
+    headers = {"User-Agent": USER_AGENT}
+    params: dict[str, str | int] = {"search": query, "per_page": max_results}
+    if api_key:
+        params["api_key"] = api_key
+
+    resp = requests.get(OPENALEX_API_URL, params=params, headers=headers)
     if resp.status_code != 200:
-        raise ResolverError(f"Crossref search failed: HTTP {resp.status_code}")
-    items = resp.json()["message"]["items"]
-    if not items:
+        raise ResolverError(f"OpenAlex search failed: HTTP {resp.status_code}")
+
+    global _api_key_warning_shown
+    if not api_key and not _api_key_warning_shown:
+        _api_key_warning_shown = True
+        remaining = resp.headers.get("X-RateLimit-Remaining", "unknown")
+        print(
+            f"Warning: No OpenAlex API key configured. "
+            f"Daily limit credits remaining: {remaining}. "
+            f"Set one with: fbib --config-api-key YOUR_KEY",
+            file=sys.stderr,
+        )
+
+    results = resp.json()["results"]
+    if not results:
         raise ResolverError(f"No results found for query: '{query}'")
-    return [item["DOI"] for item in items[:max_results]]
+
+    dois = []
+    for item in results:
+        doi_url = item.get("doi")
+        if doi_url:
+            doi = doi_url.removeprefix("https://doi.org/")
+            dois.append(doi)
+        if len(dois) >= max_results:
+            break
+
+    if not dois:
+        raise ResolverError(f"No results with DOIs found for query: '{query}'")
+    return dois
 
 
 def resolve(query: str) -> str:
@@ -115,12 +144,12 @@ def resolve(query: str) -> str:
     DOI URLs (e.g. https://doi.org/10.xxxx/yyyy) are normalized to bare
     DOIs before resolution. If the input is a DOI, fetches directly.
     arXiv DOIs are routed to arXiv's BibTeX endpoint.
-    Otherwise searches Crossref for the top result and resolves that DOI.
+    Otherwise searches OpenAlex for the top result and resolves that DOI.
     """
     query = normalize_doi_input(query)
     if is_doi(query):
         if is_arxiv_doi(query):
             return resolve_arxiv(extract_arxiv_id(query))
         return resolve_doi(query)
-    dois = search_crossref(query)
+    dois = search_openalex(query)
     return resolve_doi(dois[0])

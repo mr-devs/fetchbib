@@ -16,7 +16,7 @@ from fetchbib.resolver import (
     normalize_doi_input,
     resolve_arxiv,
     resolve_doi,
-    search_crossref,
+    search_openalex,
 )
 
 
@@ -59,9 +59,9 @@ def main() -> None:
         help="Max results per free-text search (1-100, default: 1)",
     )
     parser.add_argument(
-        "--config-email",
-        metavar="EMAIL",
-        help="Set the email used in the User-Agent header and exit",
+        "--config-api-key",
+        metavar="KEY",
+        help="Set your OpenAlex API key (get one free at openalex.org) and exit",
     )
     parser.add_argument(
         "--config-protect-titles",
@@ -89,10 +89,10 @@ def main() -> None:
     if args.max_results < 1 or args.max_results > 100:
         parser.error("--max-results must be between 1 and 100")
 
-    # --config-email: save and exit immediately
-    if args.config_email:
-        config.set_email(args.config_email)
-        print(f"Email set to: {args.config_email}")
+    # --config-api-key: save and exit immediately
+    if args.config_api_key:
+        config.set_openalex_api_key(args.config_api_key)
+        print("OpenAlex API key saved.")
         sys.exit(0)
 
     # --config-protect-titles: toggle and exit immediately
@@ -220,7 +220,7 @@ def _resolve_single(query: str, *, max_results: int) -> list[str]:
             )
         ]
     else:
-        dois = search_crossref(query, max_results)
+        dois = search_openalex(query, max_results)
         results = []
         for doi in dois:
             try:

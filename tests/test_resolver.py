@@ -17,7 +17,7 @@ from fetchbib.resolver import (
     resolve,
     resolve_arxiv,
     resolve_doi,
-    search_crossref,
+    search_openalex,
 )
 
 # ---------------------------------------------------------------------------
@@ -202,70 +202,204 @@ class TestResolveDoi:
 
 
 # ---------------------------------------------------------------------------
-# search_crossref
+# search_openalex
 # ---------------------------------------------------------------------------
 
 
-class TestSearchCrossref:
-    """Tests for the Crossref search API."""
+class TestSearchOpenalex:
+    """Tests for the OpenAlex search API."""
 
     @patch("fetchbib.resolver.requests.get")
-    def test_returns_list_of_dois(self, mock_get):
+    def test_returns_list_of_dois(self, mock_get, monkeypatch):
+        monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {
-            "message": {
-                "items": [
-                    {"DOI": DOI_A},
-                    {"DOI": "10.9999/other"},
-                ]
-            }
+            "results": [
+                {"doi": f"https://doi.org/{DOI_A}"},
+                {"doi": "https://doi.org/10.9999/other"},
+            ]
         }
+        mock_resp.headers = {}
         mock_get.return_value = mock_resp
 
-        result = search_crossref(SEARCH_QUERY_A)
+        result = search_openalex(SEARCH_QUERY_A)
         assert result == [DOI_A]
 
     @patch("fetchbib.resolver.requests.get")
-    def test_max_results_parameter(self, mock_get):
+    def test_max_results_parameter(self, mock_get, monkeypatch):
+        monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {
-            "message": {
-                "items": [
-                    {"DOI": DOI_A},
-                    {"DOI": "10.9999/second"},
-                    {"DOI": "10.9999/third"},
-                ]
-            }
+            "results": [
+                {"doi": f"https://doi.org/{DOI_A}"},
+                {"doi": "https://doi.org/10.9999/second"},
+                {"doi": "https://doi.org/10.9999/third"},
+            ]
         }
+        mock_resp.headers = {}
         mock_get.return_value = mock_resp
 
-        result = search_crossref(SEARCH_QUERY_A, max_results=3)
+        result = search_openalex(SEARCH_QUERY_A, max_results=3)
         assert result == [DOI_A, "10.9999/second", "10.9999/third"]
-        # Verify rows parameter was passed
+        # Verify per_page parameter was passed
         call_kwargs = mock_get.call_args
         params = call_kwargs.kwargs.get("params") or call_kwargs[1].get("params", {})
-        assert params["rows"] == 3
+        assert params["per_page"] == 3
 
     @patch("fetchbib.resolver.requests.get")
-    def test_raises_on_empty_results(self, mock_get):
+    def test_raises_on_empty_results(self, mock_get, monkeypatch):
+        monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        mock_resp.json.return_value = {"message": {"items": []}}
+        mock_resp.json.return_value = {"results": []}
+        mock_resp.headers = {}
         mock_get.return_value = mock_resp
 
         with pytest.raises(ResolverError, match="[Nn]o results"):
-            search_crossref("nonexistent gibberish query")
+            search_openalex("nonexistent gibberish query")
 
     @patch("fetchbib.resolver.requests.get")
-    def test_raises_on_http_failure(self, mock_get):
+    def test_raises_on_http_failure(self, mock_get, monkeypatch):
+        monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
         mock_resp = MagicMock()
         mock_resp.status_code = 503
         mock_get.return_value = mock_resp
 
         with pytest.raises(ResolverError, match="503"):
-            search_crossref("anything")
+            search_openalex("anything")
+
+    @patch("fetchbib.resolver.requests.get")
+    def test_includes_api_key_from_env(self, mock_get, monkeypatch):
+        """API key from env var is included in request."""
+        monkeypatch.setenv("OPENALEX_API_KEY", "test_key_env")
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"results": [{"doi": f"https://doi.org/{DOI_A}"}]}
+        mock_resp.headers = {}
+        mock_get.return_value = mock_resp
+
+        search_openalex("test query")
+
+        call_kwargs = mock_get.call_args
+        params = call_kwargs.kwargs.get("params") or call_kwargs[1].get("params", {})
+        assert params["api_key"] == "test_key_env"
+
+    @patch("fetchbib.resolver.requests.get")
+    def test_includes_api_key_from_config(self, mock_get, tmp_path, monkeypatch):
+        """API key from config file is included when env var not set."""
+        import json
+
+        from fetchbib import config
+
+        monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"openalex_api_key": "test_key_config"}))
+        monkeypatch.setattr(config, "CONFIG_FILE", config_file)
+        monkeypatch.setattr(config, "CONFIG_DIR", tmp_path)
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"results": [{"doi": f"https://doi.org/{DOI_A}"}]}
+        mock_resp.headers = {}
+        mock_get.return_value = mock_resp
+
+        search_openalex("test query")
+
+        call_kwargs = mock_get.call_args
+        params = call_kwargs.kwargs.get("params") or call_kwargs[1].get("params", {})
+        assert params["api_key"] == "test_key_config"
+
+    @patch("fetchbib.resolver.requests.get")
+    def test_warning_when_no_api_key(self, mock_get, monkeypatch, capsys):
+        """Warning is shown to stderr when no API key is configured."""
+        import fetchbib.resolver as resolver_module
+
+        monkeypatch.setattr(resolver_module, "_api_key_warning_shown", False)
+        monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"results": [{"doi": f"https://doi.org/{DOI_A}"}]}
+        mock_resp.headers = {"X-RateLimit-Remaining": "95"}
+        mock_get.return_value = mock_resp
+
+        search_openalex("test query")
+
+        captured = capsys.readouterr()
+        assert "API key" in captured.err or "api key" in captured.err.lower()
+        assert "95" in captured.err
+
+    @patch("fetchbib.resolver.requests.get")
+    def test_warning_shown_only_once(self, mock_get, monkeypatch, capsys):
+        """Warning is shown only once per session, not on every call."""
+        import fetchbib.resolver as resolver_module
+
+        monkeypatch.setattr(resolver_module, "_api_key_warning_shown", False)
+        monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"results": [{"doi": f"https://doi.org/{DOI_A}"}]}
+        mock_resp.headers = {"X-RateLimit-Remaining": "95"}
+        mock_get.return_value = mock_resp
+
+        search_openalex("first query")
+        search_openalex("second query")
+
+        captured = capsys.readouterr()
+        # Warning should appear exactly once
+        assert captured.err.count("No OpenAlex API key configured") == 1
+
+    @patch("fetchbib.resolver.requests.get")
+    def test_no_warning_when_api_key_set(self, mock_get, monkeypatch, capsys):
+        """No warning is shown when API key is configured."""
+        monkeypatch.setenv("OPENALEX_API_KEY", "my_key")
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"results": [{"doi": f"https://doi.org/{DOI_A}"}]}
+        mock_resp.headers = {}
+        mock_get.return_value = mock_resp
+
+        search_openalex("test query")
+
+        captured = capsys.readouterr()
+        assert "API key" not in captured.err
+
+    @patch("fetchbib.resolver.requests.get")
+    def test_skips_results_without_doi(self, mock_get, monkeypatch):
+        """Results without a DOI are skipped."""
+        monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "results": [
+                {"doi": None, "display_name": "No DOI paper"},
+                {"doi": f"https://doi.org/{DOI_A}"},
+            ]
+        }
+        mock_resp.headers = {}
+        mock_get.return_value = mock_resp
+
+        result = search_openalex("test query", max_results=2)
+        assert result == [DOI_A]
+
+    @patch("fetchbib.resolver.requests.get")
+    def test_raises_when_results_exist_but_none_have_dois(self, mock_get, monkeypatch):
+        """Distinct error when results exist but none have DOIs."""
+        monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "results": [
+                {"doi": None, "display_name": "Paper without DOI"},
+                {"doi": None, "display_name": "Another paper without DOI"},
+            ]
+        }
+        mock_resp.headers = {}
+        mock_get.return_value = mock_resp
+
+        with pytest.raises(ResolverError, match="No results with DOIs found"):
+            search_openalex("query with no doi results")
 
 
 # ---------------------------------------------------------------------------
@@ -277,7 +411,7 @@ class TestResolve:
     """Tests for the top-level resolve() orchestrator."""
 
     @patch("fetchbib.resolver.resolve_doi")
-    @patch("fetchbib.resolver.search_crossref")
+    @patch("fetchbib.resolver.search_openalex")
     def test_routes_doi_directly(self, mock_search, mock_resolve_doi):
         mock_resolve_doi.return_value = "@article{...}"
 
@@ -287,7 +421,7 @@ class TestResolve:
         mock_search.assert_not_called()
 
     @patch("fetchbib.resolver.resolve_doi")
-    @patch("fetchbib.resolver.search_crossref")
+    @patch("fetchbib.resolver.search_openalex")
     def test_routes_non_doi_through_search(self, mock_search, mock_resolve_doi):
         mock_search.return_value = [DOI_A]
         mock_resolve_doi.return_value = "@article{...}"
@@ -299,7 +433,7 @@ class TestResolve:
 
     @patch("fetchbib.resolver.resolve_arxiv")
     @patch("fetchbib.resolver.resolve_doi")
-    @patch("fetchbib.resolver.search_crossref")
+    @patch("fetchbib.resolver.search_openalex")
     def test_routes_arxiv_doi_to_arxiv(self, mock_search, mock_resolve_doi, mock_arxiv):
         mock_arxiv.return_value = "@misc{deverna2024...}"
 
@@ -315,20 +449,64 @@ class TestResolve:
 # ---------------------------------------------------------------------------
 
 
-class TestUserAgentConfig:
-    """Tests for configurable User-Agent email."""
+class TestApiKeyConfig:
+    """Tests for OpenAlex API key configuration."""
 
-    @patch("fetchbib.resolver.requests.get")
-    @patch("fetchbib.resolver.config.get_email", return_value="custom@university.edu")
-    def test_custom_email_in_user_agent(self, _mock_email, mock_get):
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.text = "@article{...}"
-        mock_get.return_value = mock_resp
+    def test_get_api_key_returns_config_file_when_env_unset(
+        self, tmp_path, monkeypatch
+    ):
+        """Config file is used when env var is not set."""
+        import json
 
-        resolve_doi("10.1234/test")
+        from fetchbib import config
 
-        headers = (
-            mock_get.call_args.kwargs.get("headers") or mock_get.call_args[1]["headers"]
-        )
-        assert "custom@university.edu" in headers["User-Agent"]
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"openalex_api_key": "config_key_456"}))
+        monkeypatch.setattr(config, "CONFIG_FILE", config_file)
+        monkeypatch.setattr(config, "CONFIG_DIR", tmp_path)
+        monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+
+        result = config.get_openalex_api_key()
+        assert result == "config_key_456"
+
+    def test_get_api_key_returns_none_when_neither_set(self, tmp_path, monkeypatch):
+        """Returns None when neither env var nor config file has a key."""
+        from fetchbib import config
+
+        config_file = tmp_path / "config.json"
+        monkeypatch.setattr(config, "CONFIG_FILE", config_file)
+        monkeypatch.setattr(config, "CONFIG_DIR", tmp_path)
+        monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+
+        result = config.get_openalex_api_key()
+        assert result is None
+
+    def test_env_var_takes_precedence_over_config_file(self, tmp_path, monkeypatch):
+        """Env var wins even when config file has a different key."""
+        import json
+
+        from fetchbib import config
+
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"openalex_api_key": "config_key"}))
+        monkeypatch.setattr(config, "CONFIG_FILE", config_file)
+        monkeypatch.setattr(config, "CONFIG_DIR", tmp_path)
+        monkeypatch.setenv("OPENALEX_API_KEY", "env_key")
+
+        result = config.get_openalex_api_key()
+        assert result == "env_key"
+
+    def test_set_api_key_saves_to_config_file(self, tmp_path, monkeypatch):
+        """set_openalex_api_key persists to config file."""
+        import json
+
+        from fetchbib import config
+
+        config_file = tmp_path / "config.json"
+        monkeypatch.setattr(config, "CONFIG_FILE", config_file)
+        monkeypatch.setattr(config, "CONFIG_DIR", tmp_path)
+
+        config.set_openalex_api_key("my_new_key_789")
+
+        saved = json.loads(config_file.read_text())
+        assert saved["openalex_api_key"] == "my_new_key_789"

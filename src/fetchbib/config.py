@@ -4,24 +4,31 @@ Reads and writes a JSON config file at ~/.config/fetchbib/config.json.
 """
 
 import json
+import os
 from pathlib import Path
 
 CONFIG_DIR = Path.home() / ".config" / "fetchbib"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
-DEFAULT_EMAIL = "fetchbib@example.com"
+OPENALEX_API_KEY_ENV = "OPENALEX_API_KEY"
 
 
-def get_email() -> str:
-    """Return the configured email, or the default if none is set."""
+def get_openalex_api_key() -> str | None:
+    """Return the OpenAlex API key, checking env var first, then config file.
+
+    Returns None if no key is configured.
+    """
+    env_key = os.environ.get(OPENALEX_API_KEY_ENV)
+    if env_key:
+        return env_key
     cfg = _read_config()
-    return cfg.get("email", DEFAULT_EMAIL)
+    return cfg.get("openalex_api_key")
 
 
-def set_email(email: str) -> None:
-    """Persist the email to the config file."""
+def set_openalex_api_key(key: str) -> None:
+    """Persist the OpenAlex API key to the config file."""
     cfg = _read_config()
-    cfg["email"] = email
+    cfg["openalex_api_key"] = key
     _write_config(cfg)
 
 

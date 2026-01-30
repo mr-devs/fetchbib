@@ -153,7 +153,7 @@ class TestMaxResults:
     """Tests for the --max-results flag."""
 
     @patch("fetchbib.cli.resolve_doi", return_value=RAW_BIBTEX_A)
-    @patch("fetchbib.cli.search_crossref", return_value=[DOI_A])
+    @patch("fetchbib.cli.search_openalex", return_value=[DOI_A])
     def test_default_returns_one_result(self, mock_search, mock_resolve):
         code, stdout, _ = run_cli([SEARCH_QUERY_A])
 
@@ -180,7 +180,7 @@ class TestMaxResults:
         assert "free-text" in stderr
 
     @patch(
-        "fetchbib.cli.search_crossref", return_value=[DOI_A, "10.9999/broken", DOI_B]
+        "fetchbib.cli.search_openalex", return_value=[DOI_A, "10.9999/broken", DOI_B]
     )
     @patch("fetchbib.cli.resolve_doi")
     def test_partial_failure_returns_successful_results(
@@ -257,25 +257,25 @@ class TestOutputFile:
 
 
 # ---------------------------------------------------------------------------
-# Config email
+# Config API key
 # ---------------------------------------------------------------------------
 
 
-class TestConfigEmail:
-    """Tests for --config-email."""
+class TestConfigApiKey:
+    """Tests for --config-api-key."""
 
-    def test_config_email_saves_and_exits(self, tmp_path):
+    def test_config_api_key_saves_and_exits(self, tmp_path):
         config_file = tmp_path / "config.json"
         with (
             patch("fetchbib.config.CONFIG_FILE", config_file),
             patch("fetchbib.config.CONFIG_DIR", tmp_path),
         ):
-            code, stdout, _ = run_cli(["--config-email", "user@university.edu"])
+            code, stdout, _ = run_cli(["--config-api-key", "my_openalex_key_123"])
 
         assert code == 0
-        assert "user@university.edu" in stdout
+        assert "OpenAlex API key saved" in stdout
         saved = json.loads(config_file.read_text())
-        assert saved["email"] == "user@university.edu"
+        assert saved["openalex_api_key"] == "my_openalex_key_123"
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 # fetchbib
 
 A command-line tool to resolve DOIs and free-text search queries into formatted BibTeX entries.
-Powered by [doi.org](https://www.doi.org/), [arXiv](https://arxiv.org/), and the [Crossref API](https://api.crossref.org/).
+Powered by [doi.org](https://www.doi.org/), [arXiv](https://arxiv.org/), and the [OpenAlex API](https://openalex.org/).
 
 ## Installation
 
@@ -48,10 +48,10 @@ fbib 10.48550/arXiv.2410.21554
 Search by free text by including text between quotes:
 
 ```bash
-fbib "DeVerna Fact-checking information from large language models"
+fbib "Fact-checking information from large language models can decrease headline discernment"
 ```
 
-> **Note**: Search works best with full paper titles (or partial titles with an author last name).
+> **Note**: OpenAlex searches titles and abstracts. Full or partial paper titles work best.
 > Use `-n` to return multiple results if needed.
 > See [Specify number of free-text matches](#specify-number-of-free-text-matches) section below.
 
@@ -59,7 +59,7 @@ fbib "DeVerna Fact-checking information from large language models"
 
 ```
 fbib [-h] [-f FILE] [-o OUTPUT] [-a] [-n MAX_RESULTS]
-     [--config-email EMAIL] [--config-protect-titles]
+     [--config-api-key KEY] [--config-protect-titles]
      [--config-exclude-issn] [--config-exclude-doi]
      [inputs ...]
 ```
@@ -80,7 +80,7 @@ fbib "10.1609/icwsm.v5i1.14126, 10.1093/jcmc/zmz022"
 fbib "https://doi.org/10.1609/icwsm.v5i1.14126, https://doi.org/10.1093/jcmc/zmz022"
 
 # Mix DOIs, URLs, and search queries
-fbib 10.1609/icwsm.v5i1.14126 "DeVerna Fact-checking information from large language models"
+fbib 10.1609/icwsm.v5i1.14126 "Fact-checking information from large language models"
 ```
 
 From a file (`--file`), each line is treated the same way — one entry per line, or comma-separated on a single line:
@@ -118,12 +118,18 @@ fbib -n 3 "Fact-checking information from large language models can decrease"
 
 Settings are stored in `~/.config/fetchbib/config.json` and persist across sessions.
 
-### Email
+### OpenAlex API Key
 
-Crossref gives better rate limits to requests that include a contact email. Set yours once:
+OpenAlex allows unauthenticated requests but with limited daily credits. For higher limits, get a free API key at [openalex.org](https://openalex.org/):
 
 ```bash
-fbib --config-email you@example.com
+fbib --config-api-key YOUR_API_KEY
+```
+
+You can also use the `OPENALEX_API_KEY` environment variable, which takes precedence over the config file:
+
+```bash
+OPENALEX_API_KEY=your_key fbib "search query"
 ```
 
 ### Protect titles

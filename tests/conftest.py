@@ -5,8 +5,8 @@ DOI_A = "10.1073/pnas.2322823121"
 DOI_B = "10.1609/icwsm.v5i1.14126"
 DOI_URL_A = f"https://doi.org/{DOI_A}"
 
-# Search query that resolves to DOI_A
-SEARCH_QUERY_A = "DeVerna Fact-checking information from large language models"
+# Search query that resolves to DOI_A (OpenAlex searches titles/abstracts only)
+SEARCH_QUERY_A = "Fact-checking information from large language models can decrease headline discernment"
 
 # Expected author in DOI_A results
 AUTHOR_A = "DeVerna"
