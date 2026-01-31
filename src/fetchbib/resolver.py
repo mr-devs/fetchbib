@@ -27,9 +27,6 @@ ARXIV_BIBTEX_URL = "https://arxiv.org/bibtex/"
 
 USER_AGENT = "fetchbib/1.0"
 
-# Track whether we've shown the API key warning this session
-_api_key_warning_shown = False
-
 
 class ResolverError(Exception):
     """Raised when DOI resolution or OpenAlex search fails."""
@@ -76,7 +73,9 @@ def resolve_doi(doi: str) -> str:
         raise ResolverError(
             f"DOI resolution failed for '{doi}': HTTP {resp.status_code}"
         )
-    return resp.text
+    # doi.org returns UTF-8 content but without charset in Content-Type,
+    # causing requests to default to ISO-8859-1. Decode as UTF-8 explicitly.
+    return resp.content.decode("utf-8")
 
 
 def resolve_arxiv(arxiv_id: str) -> str:
@@ -90,7 +89,20 @@ def resolve_arxiv(arxiv_id: str) -> str:
         raise ResolverError(
             f"arXiv resolution failed for '{arxiv_id}': HTTP {resp.status_code}"
         )
-    return resp.text
+    return resp.content.decode("utf-8")
+
+
+def _warn_no_api_key_once(remaining: str) -> None:
+    """Print a warning about missing API key, but only once per session."""
+    if getattr(_warn_no_api_key_once, "_shown", False):
+        return
+    _warn_no_api_key_once._shown = True
+    print(
+        f"Warning: No OpenAlex API key configured. "
+        f"Daily limit credits remaining: {remaining}. "
+        f"Set one with: fbib --config-api-key YOUR_KEY",
+        file=sys.stderr,
+    )
 
 
 def search_openalex(query: str, max_results: int = 1) -> list[str]:
@@ -109,16 +121,9 @@ def search_openalex(query: str, max_results: int = 1) -> list[str]:
     if resp.status_code != 200:
         raise ResolverError(f"OpenAlex search failed: HTTP {resp.status_code}")
 
-    global _api_key_warning_shown
-    if not api_key and not _api_key_warning_shown:
-        _api_key_warning_shown = True
+    if not api_key:
         remaining = resp.headers.get("X-RateLimit-Remaining", "unknown")
-        print(
-            f"Warning: No OpenAlex API key configured. "
-            f"Daily limit credits remaining: {remaining}. "
-            f"Set one with: fbib --config-api-key YOUR_KEY",
-            file=sys.stderr,
-        )
+        _warn_no_api_key_once(remaining)
 
     results = resp.json()["results"]
     if not results:
@@ -138,18 +143,69 @@ def search_openalex(query: str, max_results: int = 1) -> list[str]:
     return dois
 
 
-def resolve(query: str) -> str:
-    """Resolve a DOI, DOI URL, or free-text query to raw BibTeX.
+def resolve_to_bibtex(
+    query: str,
+    *,
+    max_results: int = 1,
+    protect_titles: bool = False,
+    exclude_issn: bool = False,
+    exclude_doi: bool = False,
+) -> list[str]:
+    """Resolve a query to formatted BibTeX entries.
 
-    DOI URLs (e.g. https://doi.org/10.xxxx/yyyy) are normalized to bare
-    DOIs before resolution. If the input is a DOI, fetches directly.
-    arXiv DOIs are routed to arXiv's BibTeX endpoint.
-    Otherwise searches OpenAlex for the top result and resolves that DOI.
+    Accepts DOIs (bare or URL form), arXiv DOIs, or free-text search queries.
+    Returns a list of formatted BibTeX strings.
+
+    For DOIs, returns a single-item list.
+    For free-text searches, returns up to max_results entries.
+
+    Individual DOI failures during free-text searches are warned but don't
+    stop processing of other results.
     """
+    from fetchbib.formatter import format_bibtex
+
     query = normalize_doi_input(query)
+
+    def _format(raw: str) -> str:
+        return format_bibtex(
+            raw,
+            protect_titles=protect_titles,
+            exclude_issn=exclude_issn,
+            exclude_doi=exclude_doi,
+        )
+
     if is_doi(query):
         if is_arxiv_doi(query):
-            return resolve_arxiv(extract_arxiv_id(query))
-        return resolve_doi(query)
-    dois = search_openalex(query)
-    return resolve_doi(dois[0])
+            raw = resolve_arxiv(extract_arxiv_id(query))
+        else:
+            raw = resolve_doi(query)
+        try:
+            return [_format(raw)]
+        except ValueError as exc:
+            raise ResolverError(f"Invalid BibTeX response for '{query}': {exc}")
+
+    dois = search_openalex(query, max_results)
+    results = []
+    failed_count = 0
+    for doi in dois:
+        try:
+            if is_arxiv_doi(doi):
+                raw = resolve_arxiv(extract_arxiv_id(doi))
+            else:
+                raw = resolve_doi(doi)
+            results.append(_format(raw))
+        except (ResolverError, ValueError) as exc:
+            failed_count += 1
+            print(
+                f"Warning: Could not fetch BibTeX for {doi} ({exc}). "
+                f"Try: https://doi.org/{doi}",
+                file=sys.stderr,
+            )
+
+    # If all DOIs failed, raise an error
+    if not results and failed_count > 0:
+        raise ResolverError(
+            f"All {failed_count} search result(s) failed to resolve for: '{query}'"
+        )
+
+    return results

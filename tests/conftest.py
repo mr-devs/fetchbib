@@ -1,4 +1,9 @@
-"""Shared test data and fixtures."""
+"""Shared test data and fixtures.
+
+Provides sample DOIs, search queries, and raw BibTeX strings used across
+the test suite. Constants are used to ensure consistency and reduce
+duplication in tests.
+"""
 
 # Sample DOIs for testing.
 DOI_A = "10.1073/pnas.2322823121"

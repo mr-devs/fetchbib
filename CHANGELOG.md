@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-01-30
+
+### Fixed
+
+- arXiv DOIs from search results now correctly route to arxiv.org (previously failed with HTML response)
+- Commas in search queries are now preserved (e.g., "Smith, John 2024" no longer splits into two queries)
+- DOI and DOI URL forms are now deduplicated (e.g., `10.1234/x` and `https://doi.org/10.1234/x`)
+- arXiv DOIs with different casing are now deduplicated (e.g., `arXiv` vs `arxiv`)
+- Invalid BibTeX responses (e.g., HTML from Zenodo) now show a warning instead of crashing
+- Exit code is now 1 when all search results fail to resolve
+
+### Changed
+
+- Internal refactoring: introduced `BibTeXEntry` dataclass for cleaner BibTeX manipulation
+- Internal refactoring: consolidated resolution logic into `resolve_to_bibtex()` function
+
 ## [0.5.0] - 2026-01-29
 
 ### Changed

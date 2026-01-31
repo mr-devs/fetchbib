@@ -1,5 +1,7 @@
 """Tests for the BibTeX formatter (Phase 1)."""
 
+import pytest
+
 from conftest import (
     FORMATTER_EXPECTED_SINGLE_LINE,
     FORMATTER_RAW_AUTHOR_COMMAS,
@@ -7,7 +9,7 @@ from conftest import (
     FORMATTER_RAW_SINGLE_LINE,
     FORMATTER_RAW_TRAILING_COMMA,
 )
-from fetchbib.formatter import _protect_title, format_bibtex
+from fetchbib.formatter import BibTeXEntry, _protect_title, format_bibtex
 
 
 class TestFormatBibtex:
@@ -106,6 +108,25 @@ class TestExcludeIssn:
         assert "title = {Test}" in result
 
 
+class TestCitationKeyCleanup:
+    """Tests for citation key cleanup (collapsing multiple underscores)."""
+
+    @pytest.mark.parametrize(
+        "input_key,expected_key",
+        [
+            ("Mesk__2023", "Mesk_2023"),  # double underscore
+            ("Name___2023", "Name_2023"),  # triple underscore
+            ("Name_2023", "Name_2023"),  # single underscore unchanged
+            ("Name2023", "Name2023"),  # no underscore unchanged
+        ],
+    )
+    def test_underscore_handling(self, input_key, expected_key):
+        """Multiple underscores are collapsed; single/none unchanged."""
+        raw = f"@article{{{input_key},title={{Test}},author={{Smith}}}}"
+        result = format_bibtex(raw)
+        assert result.startswith(f"@article{{{expected_key},")
+
+
 class TestExcludeDoi:
     """Tests for format_bibtex() with exclude_doi=True."""
 
@@ -128,3 +149,75 @@ class TestExcludeDoi:
         assert "author = {Smith}" in result
         assert "title = {Test}" in result
         assert "url = {http://example.com}" in result
+
+
+class TestBibTeXEntry:
+    """Tests for the BibTeXEntry dataclass."""
+
+    def test_from_raw_bibtex_parses_entry_type(self):
+        """Entry type is correctly parsed from raw BibTeX."""
+        raw = "@article{Key2020,author={Someone},year={2020}}"
+        entry = BibTeXEntry.from_raw_bibtex(raw)
+        assert entry.entry_type == "article"
+
+    def test_from_raw_bibtex_parses_citation_key(self):
+        """Citation key is correctly parsed from raw BibTeX."""
+        raw = "@article{DeVerna_2024,author={Someone},year={2020}}"
+        entry = BibTeXEntry.from_raw_bibtex(raw)
+        assert entry.citation_key == "DeVerna_2024"
+
+    def test_from_raw_bibtex_parses_fields(self):
+        """Fields are correctly parsed from raw BibTeX."""
+        raw = "@article{Key,author={Smith},year={2020}}"
+        entry = BibTeXEntry.from_raw_bibtex(raw)
+        assert ("author", "{Smith}") in entry.fields
+        assert ("year", "{2020}") in entry.fields
+
+    def test_remove_field(self):
+        """remove_field removes matching fields."""
+        entry = BibTeXEntry(
+            "article", "Key", [("author", "{Smith}"), ("issn", "{1234}")]
+        )
+        entry.remove_field("issn")
+        assert ("issn", "{1234}") not in entry.fields
+        assert ("author", "{Smith}") in entry.fields
+
+    def test_remove_field_case_insensitive(self):
+        """remove_field is case-insensitive."""
+        entry = BibTeXEntry("article", "Key", [("ISSN", "{1234}")])
+        entry.remove_field("issn")
+        assert len(entry.fields) == 0
+
+    def test_protect_title_leaves_other_fields(self):
+        """protect_title does not affect non-title fields."""
+        entry = BibTeXEntry("article", "Key", [("author", "{Smith, {Jr.}}")])
+        entry.protect_title()
+        assert entry.fields[0] == ("author", "{Smith, {Jr.}}")
+
+    def test_sort_fields(self):
+        """sort_fields orders fields alphabetically."""
+        entry = BibTeXEntry(
+            "article", "Key", [("year", "{2020}"), ("author", "{Smith}")]
+        )
+        entry.sort_fields()
+        assert entry.fields[0][0] == "author"
+        assert entry.fields[1][0] == "year"
+
+    def test_to_formatted_string(self):
+        """to_formatted_string produces correct output format."""
+        entry = BibTeXEntry(
+            "article", "Key2020", [("author", "{Smith}"), ("year", "{2020}")]
+        )
+        result = entry.to_formatted_string()
+        assert result == "@article{Key2020,\n  author = {Smith},\n  year = {2020}\n}"
+
+    def test_roundtrip(self):
+        """Parsing and formatting produces consistent output."""
+        raw = "@article{Key,author={Smith},year={2020}}"
+        entry = BibTeXEntry.from_raw_bibtex(raw)
+        entry.sort_fields()
+        result = entry.to_formatted_string()
+        # Parse again
+        entry2 = BibTeXEntry.from_raw_bibtex(result)
+        entry2.sort_fields()
+        assert entry2.to_formatted_string() == result

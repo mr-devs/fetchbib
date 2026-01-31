@@ -10,6 +10,8 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from conftest import DOI_A, DOI_B, DOI_URL_A, RAW_BIBTEX_A, RAW_BIBTEX_B, SEARCH_QUERY_A
 from fetchbib.resolver import ResolverError
 
@@ -44,7 +46,7 @@ def run_cli(args: list[str]) -> tuple[int, str, str]:
 class TestInputParsing:
     """Tests for how the CLI collects and processes inputs."""
 
-    @patch("fetchbib.cli.resolve_doi", return_value=RAW_BIBTEX_A)
+    @patch("fetchbib.resolver.resolve_doi", return_value=RAW_BIBTEX_A)
     def test_single_positional_doi(self, mock_resolve):
         code, stdout, _ = run_cli([DOI_A])
 
@@ -52,7 +54,7 @@ class TestInputParsing:
         assert "@article{Key1," in stdout
         assert code == 0
 
-    @patch("fetchbib.cli.resolve_doi", side_effect=[RAW_BIBTEX_A, RAW_BIBTEX_B])
+    @patch("fetchbib.resolver.resolve_doi", side_effect=[RAW_BIBTEX_A, RAW_BIBTEX_B])
     def test_multiple_positional_arguments(self, mock_resolve):
         code, stdout, _ = run_cli([DOI_A, DOI_B])
 
@@ -61,8 +63,8 @@ class TestInputParsing:
         assert "Key2" in stdout
         assert code == 0
 
-    @patch("fetchbib.cli.resolve_doi", side_effect=[RAW_BIBTEX_A, RAW_BIBTEX_B])
-    def test_comma_separated_string_is_split(self, mock_resolve):
+    @patch("fetchbib.resolver.resolve_doi", side_effect=[RAW_BIBTEX_A, RAW_BIBTEX_B])
+    def test_comma_separated_dois_are_split(self, mock_resolve):
         code, stdout, _ = run_cli([f"{DOI_A}, {DOI_B}"])
 
         assert mock_resolve.call_count == 2
@@ -71,7 +73,19 @@ class TestInputParsing:
         assert DOI_B in calls
         assert code == 0
 
-    @patch("fetchbib.cli.resolve_doi", side_effect=[RAW_BIBTEX_A, RAW_BIBTEX_B])
+    @patch("fetchbib.resolver.resolve_doi", return_value=RAW_BIBTEX_A)
+    @patch("fetchbib.resolver.search_openalex", return_value=[DOI_A])
+    def test_comma_in_search_query_not_split(self, mock_search, mock_resolve):
+        """Commas in free-text queries are preserved, not treated as separators."""
+        code, stdout, _ = run_cli(["Smith, John machine learning"])
+
+        # Should be treated as a single search query, not split
+        mock_search.assert_called_once()
+        query_arg = mock_search.call_args[0][0]
+        assert "Smith, John" in query_arg
+        assert code == 0
+
+    @patch("fetchbib.resolver.resolve_doi", side_effect=[RAW_BIBTEX_A, RAW_BIBTEX_B])
     def test_file_input_reads_lines(self, mock_resolve):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(f"{DOI_A}\n\n{DOI_B}\n")
@@ -81,8 +95,8 @@ class TestInputParsing:
         assert mock_resolve.call_count == 2
         assert code == 0
 
-    @patch("fetchbib.cli.resolve_doi", side_effect=[RAW_BIBTEX_A, RAW_BIBTEX_B])
-    def test_file_input_splits_comma_separated_line(self, mock_resolve):
+    @patch("fetchbib.resolver.resolve_doi", side_effect=[RAW_BIBTEX_A, RAW_BIBTEX_B])
+    def test_file_input_splits_comma_separated_dois(self, mock_resolve):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(f"{DOI_A}, {DOI_B}\n")
             f.flush()
@@ -94,7 +108,7 @@ class TestInputParsing:
         assert DOI_B in calls
         assert code == 0
 
-    @patch("fetchbib.cli.resolve_doi", return_value=RAW_BIBTEX_A)
+    @patch("fetchbib.resolver.resolve_doi", return_value=RAW_BIBTEX_A)
     def test_doi_url_is_normalized(self, mock_resolve):
         code, stdout, _ = run_cli([DOI_URL_A])
 
@@ -102,11 +116,27 @@ class TestInputParsing:
         assert "@article{Key1," in stdout
         assert code == 0
 
-    @patch("fetchbib.cli.resolve_doi", return_value=RAW_BIBTEX_A)
+    @patch("fetchbib.resolver.resolve_doi", return_value=RAW_BIBTEX_A)
     def test_duplicate_inputs_are_deduplicated(self, mock_resolve):
         code, _, _ = run_cli([DOI_A, DOI_A])
 
         mock_resolve.assert_called_once()
+        assert code == 0
+
+    @patch("fetchbib.resolver.resolve_doi", return_value=RAW_BIBTEX_A)
+    def test_doi_and_doi_url_are_deduplicated(self, mock_resolve):
+        """DOI and its URL form are treated as duplicates."""
+        code, _, _ = run_cli([DOI_A, DOI_URL_A])
+
+        mock_resolve.assert_called_once()
+        assert code == 0
+
+    @patch("fetchbib.resolver.resolve_arxiv", return_value="@misc{key,author={A}}")
+    def test_arxiv_dois_case_insensitive_dedup(self, mock_arxiv):
+        """arXiv DOIs with different casing are deduplicated."""
+        code, _, _ = run_cli(["10.48550/arXiv.2410.21554", "10.48550/arxiv.2410.21554"])
+
+        mock_arxiv.assert_called_once()
         assert code == 0
 
 
@@ -124,7 +154,7 @@ class TestErrorHandling:
         assert code == 1
         assert "nonexistent_file.txt" in stderr
 
-    @patch("fetchbib.cli.resolve_doi")
+    @patch("fetchbib.resolver.resolve_doi")
     def test_resolution_error_does_not_stop_others(self, mock_resolve):
         mock_resolve.side_effect = [
             ResolverError("fail"),
@@ -152,8 +182,8 @@ class TestErrorHandling:
 class TestMaxResults:
     """Tests for the --max-results flag."""
 
-    @patch("fetchbib.cli.resolve_doi", return_value=RAW_BIBTEX_A)
-    @patch("fetchbib.cli.search_openalex", return_value=[DOI_A])
+    @patch("fetchbib.resolver.resolve_doi", return_value=RAW_BIBTEX_A)
+    @patch("fetchbib.resolver.search_openalex", return_value=[DOI_A])
     def test_default_returns_one_result(self, mock_search, mock_resolve):
         code, stdout, _ = run_cli([SEARCH_QUERY_A])
 
@@ -161,14 +191,9 @@ class TestMaxResults:
         assert mock_resolve.call_count == 1
         assert code == 0
 
-    def test_n_0_exits_with_code_2(self):
-        code, _, stderr = run_cli(["-n", "0", SEARCH_QUERY_A])
-
-        assert code == 2
-        assert "between 1 and 100" in stderr
-
-    def test_n_101_exits_with_code_2(self):
-        code, _, stderr = run_cli(["-n", "101", SEARCH_QUERY_A])
+    @pytest.mark.parametrize("n", ["0", "101", "-1"])
+    def test_n_out_of_range_exits_with_code_2(self, n):
+        code, _, stderr = run_cli(["-n", n, SEARCH_QUERY_A])
 
         assert code == 2
         assert "between 1 and 100" in stderr
@@ -180,9 +205,10 @@ class TestMaxResults:
         assert "free-text" in stderr
 
     @patch(
-        "fetchbib.cli.search_openalex", return_value=[DOI_A, "10.9999/broken", DOI_B]
+        "fetchbib.resolver.search_openalex",
+        return_value=[DOI_A, "10.9999/broken", DOI_B],
     )
-    @patch("fetchbib.cli.resolve_doi")
+    @patch("fetchbib.resolver.resolve_doi")
     def test_partial_failure_returns_successful_results(
         self, mock_resolve, mock_search
     ):
@@ -217,7 +243,7 @@ class TestOutputFile:
         assert code == 2
         assert "--append requires --output" in stderr
 
-    @patch("fetchbib.cli.resolve_doi", return_value=RAW_BIBTEX_A)
+    @patch("fetchbib.resolver.resolve_doi", return_value=RAW_BIBTEX_A)
     def test_output_writes_to_file(self, mock_resolve):
         with tempfile.NamedTemporaryFile(suffix=".bib", delete=False) as f:
             path = f.name
@@ -229,7 +255,7 @@ class TestOutputFile:
         content = Path(path).read_text()
         assert "Key1" in content
 
-    @patch("fetchbib.cli.resolve_doi", return_value=RAW_BIBTEX_A)
+    @patch("fetchbib.resolver.resolve_doi", return_value=RAW_BIBTEX_A)
     def test_output_overwrites_by_default(self, mock_resolve):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".bib", delete=False) as f:
             f.write("OLD CONTENT\n")
@@ -241,7 +267,7 @@ class TestOutputFile:
         assert "OLD CONTENT" not in content
         assert "Key1" in content
 
-    @patch("fetchbib.cli.resolve_doi", return_value=RAW_BIBTEX_B)
+    @patch("fetchbib.resolver.resolve_doi", return_value=RAW_BIBTEX_B)
     def test_append_flag_preserves_existing(self, mock_resolve):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".bib", delete=False) as f:
             f.write("EXISTING ENTRY\n\n")
@@ -313,21 +339,6 @@ class TestConfigProtectTitles:
         saved = json.loads(config_file.read_text())
         assert saved["protect_titles"] is False
 
-    @patch("fetchbib.cli.resolve_doi")
-    def test_protect_titles_applied_to_output(self, mock_resolve, tmp_path):
-        mock_resolve.return_value = "@article{Key,title={A {GPU} Test},author={Smith}}"
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps({"protect_titles": True}))
-
-        with (
-            patch("fetchbib.config.CONFIG_FILE", config_file),
-            patch("fetchbib.config.CONFIG_DIR", tmp_path),
-        ):
-            code, stdout, _ = run_cli(["10.1234/test"])
-
-        assert code == 0
-        assert "title = {{A GPU Test}}" in stdout
-
 
 # ---------------------------------------------------------------------------
 # Config exclude-issn
@@ -364,23 +375,6 @@ class TestConfigExcludeIssn:
         saved = json.loads(config_file.read_text())
         assert saved["exclude_issn"] is False
 
-    @patch("fetchbib.cli.resolve_doi")
-    def test_exclude_issn_applied_to_output(self, mock_resolve, tmp_path):
-        mock_resolve.return_value = (
-            "@article{Key,title={Test},issn={1234-5678},author={Smith}}"
-        )
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps({"exclude_issn": True}))
-
-        with (
-            patch("fetchbib.config.CONFIG_FILE", config_file),
-            patch("fetchbib.config.CONFIG_DIR", tmp_path),
-        ):
-            code, stdout, _ = run_cli(["10.1234/test"])
-
-        assert code == 0
-        assert "issn" not in stdout.lower()
-
 
 # ---------------------------------------------------------------------------
 # Config exclude-doi
@@ -416,20 +410,3 @@ class TestConfigExcludeDoi:
         assert "disabled" in stdout.lower()
         saved = json.loads(config_file.read_text())
         assert saved["exclude_doi"] is False
-
-    @patch("fetchbib.cli.resolve_doi")
-    def test_exclude_doi_applied_to_output(self, mock_resolve, tmp_path):
-        mock_resolve.return_value = (
-            "@article{Key,title={Test},doi={10.1234/example},author={Smith}}"
-        )
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps({"exclude_doi": True}))
-
-        with (
-            patch("fetchbib.config.CONFIG_FILE", config_file),
-            patch("fetchbib.config.CONFIG_DIR", tmp_path),
-        ):
-            code, stdout, _ = run_cli(["10.1234/test"])
-
-        assert code == 0
-        assert "doi" not in stdout.lower()

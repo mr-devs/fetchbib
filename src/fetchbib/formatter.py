@@ -4,6 +4,69 @@ Transforms raw (often single-line) BibTeX into a clean, readable format
 with alphabetized fields, 2-space indentation, and proper line breaks.
 """
 
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+
+
+@dataclass
+class BibTeXEntry:
+    """Structured representation of a BibTeX entry.
+
+    Provides methods for manipulating fields and converting to formatted output.
+    """
+
+    entry_type: str
+    citation_key: str
+    fields: list[tuple[str, str]] = field(default_factory=list)
+
+    def remove_field(self, name: str) -> None:
+        """Remove all fields matching the given name (case-insensitive)."""
+        self.fields = [(k, v) for k, v in self.fields if k.lower() != name.lower()]
+
+    def protect_title(self) -> None:
+        """Transform the title field to use double braces (preserving case)."""
+        self.fields = [
+            (k, _protect_title(v) if k.lower() == "title" else v)
+            for k, v in self.fields
+        ]
+
+    def sort_fields(self) -> None:
+        """Sort fields alphabetically by key (case-insensitive)."""
+        self.fields.sort(key=lambda kv: kv[0].lower())
+
+    def to_formatted_string(self) -> str:
+        """Convert to a formatted BibTeX string with proper indentation."""
+        header = f"@{self.entry_type}{{{self.citation_key},"
+        field_lines = [f"  {key} = {value}" for key, value in self.fields]
+        return header + "\n" + ",\n".join(field_lines) + "\n}"
+
+    @classmethod
+    def from_raw_bibtex(cls, raw: str) -> BibTeXEntry:
+        """Parse a raw BibTeX string into a BibTeXEntry.
+
+        Handles single-line and multi-line input, cleans citation keys
+        with multiple underscores, and preserves field values including
+        nested braces.
+        """
+        header, fields_block = _split_header(raw.strip())
+        header = _clean_citation_key(header)
+        fields = _parse_fields(fields_block)
+
+        # Parse entry type and citation key from header
+        # Header format: @type{key,
+        match = re.match(r"@(\w+)\{([^,]+),", header)
+        if not match:
+            # Truncate for cleaner error messages (e.g., when HTML is returned)
+            preview = header[:50] + "..." if len(header) > 50 else header
+            raise ValueError(f"Invalid BibTeX (expected @type{{key,...}}): {preview}")
+
+        entry_type = match.group(1)
+        citation_key = match.group(2)
+
+        return cls(entry_type=entry_type, citation_key=citation_key, fields=fields)
+
 
 def format_bibtex(
     raw: str,
@@ -31,24 +94,29 @@ def format_bibtex(
     Commas inside braced values (e.g. author names) are preserved — only
     top-level commas are treated as field separators.
     """
-    header, fields_block = _split_header(raw.strip())
-    fields = _parse_fields(fields_block)
+    entry = BibTeXEntry.from_raw_bibtex(raw)
 
     if protect_titles:
-        fields = [
-            (k, _protect_title(v) if k.lower() == "title" else v) for k, v in fields
-        ]
+        entry.protect_title()
 
     if exclude_issn:
-        fields = [(k, v) for k, v in fields if k.lower() != "issn"]
+        entry.remove_field("issn")
 
     if exclude_doi:
-        fields = [(k, v) for k, v in fields if k.lower() != "doi"]
+        entry.remove_field("doi")
 
-    fields.sort(key=lambda kv: kv[0].lower())
+    entry.sort_fields()
 
-    field_lines = [f"  {key} = {value}" for key, value in fields]
-    return header + "\n" + ",\n".join(field_lines) + "\n}"
+    return entry.to_formatted_string()
+
+
+def _clean_citation_key(header: str) -> str:
+    """Collapse multiple underscores in the citation key to a single underscore.
+
+    The header has the form '@type{key,' — this function fixes keys like
+    'Mesk__2023' that result from non-ASCII character stripping.
+    """
+    return re.sub(r"_+", "_", header)
 
 
 def _protect_title(value: str) -> str:

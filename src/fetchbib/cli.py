@@ -7,17 +7,24 @@ import argparse
 import sys
 
 from fetchbib import config
-from fetchbib.formatter import format_bibtex
 from fetchbib.resolver import (
     ResolverError,
-    extract_arxiv_id,
-    is_arxiv_doi,
     is_doi,
     normalize_doi_input,
-    resolve_arxiv,
-    resolve_doi,
-    search_openalex,
+    resolve_to_bibtex,
 )
+
+
+def _normalize_for_dedup(query: str) -> str:
+    """Normalize a query for deduplication purposes.
+
+    Strips DOI URL prefixes and lowercases DOIs so that different
+    representations of the same DOI are treated as duplicates.
+    """
+    normalized = normalize_doi_input(query)
+    if is_doi(normalized):
+        return normalized.lower()
+    return query  # Keep free-text queries as-is for dedup
 
 
 def main() -> None:
@@ -166,33 +173,50 @@ def _collect_inputs(args: argparse.Namespace) -> list[str]:
     """Gather inputs from positional args and --file, deduplicate."""
     raw: list[str] = []
 
-    # Positional args (each may be comma-separated)
+    # Positional args (may be comma-separated DOIs, but not free-text)
     for arg in args.inputs or []:
-        raw.extend(_split_and_strip(arg))
+        raw.extend(_smart_split(arg))
 
-    # File input (each line may also be comma-separated)
+    # File input (each line may also be comma-separated DOIs)
     if args.file:
         try:
             with open(args.file) as f:
                 for line in f:
-                    raw.extend(_split_and_strip(line))
+                    line = line.strip()
+                    if line:
+                        raw.extend(_smart_split(line))
         except FileNotFoundError:
             print(f"Error: file not found: {args.file}", file=sys.stderr)
             sys.exit(1)
 
-    # Deduplicate preserving order
+    # Deduplicate preserving order, normalizing for comparison
     seen: set[str] = set()
     unique: list[str] = []
     for item in raw:
-        if item not in seen:
-            seen.add(item)
+        key = _normalize_for_dedup(item)
+        if key not in seen:
+            seen.add(key)
             unique.append(item)
     return unique
 
 
-def _split_and_strip(value: str) -> list[str]:
-    """Split a string on commas and return non-empty stripped parts."""
-    return [part.strip() for part in value.split(",") if part.strip()]
+def _smart_split(value: str) -> list[str]:
+    """Split on commas only if all parts look like DOIs.
+
+    This prevents search queries containing commas (e.g., author names)
+    from being incorrectly split into multiple queries.
+    """
+    if "," not in value:
+        return [value.strip()] if value.strip() else []
+
+    parts = [part.strip() for part in value.split(",") if part.strip()]
+
+    # Only split if ALL parts look like DOIs (bare or URL form)
+    if all(is_doi(normalize_doi_input(p)) for p in parts):
+        return parts
+
+    # Otherwise, treat the whole thing as a single query
+    return [value.strip()] if value.strip() else []
 
 
 def _resolve_single(query: str, *, max_results: int) -> list[str]:
@@ -202,41 +226,10 @@ def _resolve_single(query: str, *, max_results: int) -> list[str]:
     For free-text searches, individual DOI failures are warned but don't stop
     processing of other results.
     """
-    protect_titles = config.get_protect_titles()
-    exclude_issn = config.get_exclude_issn()
-    exclude_doi = config.get_exclude_doi()
-    query = normalize_doi_input(query)
-    if is_doi(query):
-        if is_arxiv_doi(query):
-            raw = resolve_arxiv(extract_arxiv_id(query))
-        else:
-            raw = resolve_doi(query)
-        return [
-            format_bibtex(
-                raw,
-                protect_titles=protect_titles,
-                exclude_issn=exclude_issn,
-                exclude_doi=exclude_doi,
-            )
-        ]
-    else:
-        dois = search_openalex(query, max_results)
-        results = []
-        for doi in dois:
-            try:
-                raw = resolve_doi(doi)
-                results.append(
-                    format_bibtex(
-                        raw,
-                        protect_titles=protect_titles,
-                        exclude_issn=exclude_issn,
-                        exclude_doi=exclude_doi,
-                    )
-                )
-            except ResolverError as exc:
-                print(
-                    f"Warning: Could not fetch BibTeX for {doi} ({exc}). "
-                    f"Try: https://doi.org/{doi}",
-                    file=sys.stderr,
-                )
-        return results
+    return resolve_to_bibtex(
+        query,
+        max_results=max_results,
+        protect_titles=config.get_protect_titles(),
+        exclude_issn=config.get_exclude_issn(),
+        exclude_doi=config.get_exclude_doi(),
+    )

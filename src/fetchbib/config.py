@@ -32,43 +32,46 @@ def set_openalex_api_key(key: str) -> None:
     _write_config(cfg)
 
 
+def _get_bool(key: str, default: bool = False) -> bool:
+    """Return a boolean config value, with a default if not set."""
+    return _read_config().get(key, default)
+
+
+def _set_bool(key: str, value: bool) -> None:
+    """Persist a boolean config value."""
+    cfg = _read_config()
+    cfg[key] = value
+    _write_config(cfg)
+
+
 def get_protect_titles() -> bool:
     """Return True if titles should be double-braced."""
-    cfg = _read_config()
-    return cfg.get("protect_titles", False)
+    return _get_bool("protect_titles")
 
 
 def set_protect_titles(enabled: bool) -> None:
     """Persist the protect_titles setting."""
-    cfg = _read_config()
-    cfg["protect_titles"] = enabled
-    _write_config(cfg)
+    _set_bool("protect_titles", enabled)
 
 
 def get_exclude_issn() -> bool:
     """Return True if ISSN should be excluded from BibTeX entries."""
-    cfg = _read_config()
-    return cfg.get("exclude_issn", False)
+    return _get_bool("exclude_issn")
 
 
 def set_exclude_issn(enabled: bool) -> None:
     """Persist the exclude_issn setting."""
-    cfg = _read_config()
-    cfg["exclude_issn"] = enabled
-    _write_config(cfg)
+    _set_bool("exclude_issn", enabled)
 
 
 def get_exclude_doi() -> bool:
     """Return True if DOI should be excluded from BibTeX entries."""
-    cfg = _read_config()
-    return cfg.get("exclude_doi", False)
+    return _get_bool("exclude_doi")
 
 
 def set_exclude_doi(enabled: bool) -> None:
     """Persist the exclude_doi setting."""
-    cfg = _read_config()
-    cfg["exclude_doi"] = enabled
-    _write_config(cfg)
+    _set_bool("exclude_doi", enabled)
 
 
 def _read_config() -> dict:

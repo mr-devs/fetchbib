@@ -7,16 +7,16 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from conftest import DOI_A, SEARCH_QUERY_A
+from conftest import DOI_A, RAW_BIBTEX_A, SEARCH_QUERY_A
 from fetchbib.resolver import (
     ResolverError,
     extract_arxiv_id,
     is_arxiv_doi,
     is_doi,
     normalize_doi_input,
-    resolve,
     resolve_arxiv,
     resolve_doi,
+    resolve_to_bibtex,
     search_openalex,
 )
 
@@ -119,7 +119,7 @@ class TestResolveArxiv:
         bibtex = "@misc{deverna2024, author={DeVerna}, year={2024}}"
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        mock_resp.text = bibtex
+        mock_resp.content = bibtex.encode("utf-8")
         mock_get.return_value = mock_resp
 
         result = resolve_arxiv("2410.21554")
@@ -128,6 +128,19 @@ class TestResolveArxiv:
         mock_get.assert_called_once()
         call_args = mock_get.call_args
         assert "arxiv.org/bibtex/2410.21554" in call_args[0][0]
+
+    @patch("fetchbib.resolver.requests.get")
+    def test_utf8_encoding_preserved(self, mock_get):
+        """UTF-8 characters in author names are correctly decoded."""
+        bibtex = "@misc{key, author={Müller, Hans}, year={2024}}"
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = bibtex.encode("utf-8")
+        mock_get.return_value = mock_resp
+
+        result = resolve_arxiv("2410.21554")
+
+        assert "Müller" in result
 
     @patch("fetchbib.resolver.requests.get")
     def test_raises_on_http_failure(self, mock_get):
@@ -179,7 +192,7 @@ class TestResolveDoi:
         bibtex = "@article{Key, author={Someone}, year={2020}}"
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        mock_resp.text = bibtex
+        mock_resp.content = bibtex.encode("utf-8")
         mock_get.return_value = mock_resp
 
         result = resolve_doi("10.1234/test")
@@ -190,6 +203,20 @@ class TestResolveDoi:
         headers = call_kwargs.kwargs.get("headers") or call_kwargs[1].get("headers", {})
         assert headers["Accept"] == "text/bibliography; style=bibtex"
         assert "fetchbib" in headers["User-Agent"]
+
+    @patch("fetchbib.resolver.requests.get")
+    def test_utf8_encoding_preserved(self, mock_get):
+        """UTF-8 characters in author names are correctly decoded."""
+        bibtex = "@article{Key, author={Meskó, Bertalan}, year={2023}}"
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = bibtex.encode("utf-8")
+        mock_get.return_value = mock_resp
+
+        result = resolve_doi("10.1234/test")
+
+        assert "Meskó" in result
+        assert "MeskÃ³" not in result  # This would appear with wrong encoding
 
     @patch("fetchbib.resolver.requests.get")
     def test_raises_on_http_failure(self, mock_get):
@@ -312,11 +339,13 @@ class TestSearchOpenalex:
         assert params["api_key"] == "test_key_config"
 
     @patch("fetchbib.resolver.requests.get")
-    def test_warning_when_no_api_key(self, mock_get, monkeypatch, capsys):
+    @patch("fetchbib.resolver.config.get_openalex_api_key", return_value=None)
+    def test_warning_when_no_api_key(self, mock_config, mock_get, monkeypatch, capsys):
         """Warning is shown to stderr when no API key is configured."""
-        import fetchbib.resolver as resolver_module
+        from fetchbib.resolver import _warn_no_api_key_once
 
-        monkeypatch.setattr(resolver_module, "_api_key_warning_shown", False)
+        if hasattr(_warn_no_api_key_once, "_shown"):
+            monkeypatch.delattr(_warn_no_api_key_once, "_shown")
         monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -331,11 +360,13 @@ class TestSearchOpenalex:
         assert "95" in captured.err
 
     @patch("fetchbib.resolver.requests.get")
-    def test_warning_shown_only_once(self, mock_get, monkeypatch, capsys):
+    @patch("fetchbib.resolver.config.get_openalex_api_key", return_value=None)
+    def test_warning_shown_only_once(self, mock_config, mock_get, monkeypatch, capsys):
         """Warning is shown only once per session, not on every call."""
-        import fetchbib.resolver as resolver_module
+        from fetchbib.resolver import _warn_no_api_key_once
 
-        monkeypatch.setattr(resolver_module, "_api_key_warning_shown", False)
+        if hasattr(_warn_no_api_key_once, "_shown"):
+            monkeypatch.delattr(_warn_no_api_key_once, "_shown")
         monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -400,48 +431,6 @@ class TestSearchOpenalex:
 
         with pytest.raises(ResolverError, match="No results with DOIs found"):
             search_openalex("query with no doi results")
-
-
-# ---------------------------------------------------------------------------
-# resolve (orchestrator)
-# ---------------------------------------------------------------------------
-
-
-class TestResolve:
-    """Tests for the top-level resolve() orchestrator."""
-
-    @patch("fetchbib.resolver.resolve_doi")
-    @patch("fetchbib.resolver.search_openalex")
-    def test_routes_doi_directly(self, mock_search, mock_resolve_doi):
-        mock_resolve_doi.return_value = "@article{...}"
-
-        resolve("10.2196/jmir.1933")
-
-        mock_resolve_doi.assert_called_once_with("10.2196/jmir.1933")
-        mock_search.assert_not_called()
-
-    @patch("fetchbib.resolver.resolve_doi")
-    @patch("fetchbib.resolver.search_openalex")
-    def test_routes_non_doi_through_search(self, mock_search, mock_resolve_doi):
-        mock_search.return_value = [DOI_A]
-        mock_resolve_doi.return_value = "@article{...}"
-
-        resolve(SEARCH_QUERY_A)
-
-        mock_search.assert_called_once_with(SEARCH_QUERY_A)
-        mock_resolve_doi.assert_called_once_with(DOI_A)
-
-    @patch("fetchbib.resolver.resolve_arxiv")
-    @patch("fetchbib.resolver.resolve_doi")
-    @patch("fetchbib.resolver.search_openalex")
-    def test_routes_arxiv_doi_to_arxiv(self, mock_search, mock_resolve_doi, mock_arxiv):
-        mock_arxiv.return_value = "@misc{deverna2024...}"
-
-        resolve("10.48550/arXiv.2410.21554")
-
-        mock_arxiv.assert_called_once_with("2410.21554")
-        mock_resolve_doi.assert_not_called()
-        mock_search.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -510,3 +499,172 @@ class TestApiKeyConfig:
 
         saved = json.loads(config_file.read_text())
         assert saved["openalex_api_key"] == "my_new_key_789"
+
+
+# ---------------------------------------------------------------------------
+# resolve_to_bibtex
+# ---------------------------------------------------------------------------
+
+
+class TestResolveToBibtex:
+    """Tests for the resolve_to_bibtex orchestrator."""
+
+    @pytest.mark.parametrize(
+        "query",
+        ["10.2196/jmir.1933", "https://doi.org/10.2196/jmir.1933"],
+    )
+    @patch("fetchbib.resolver.resolve_doi")
+    @patch("fetchbib.resolver.search_openalex")
+    def test_routes_doi_directly(self, mock_search, mock_resolve_doi, query):
+        """DOIs (bare or URL form) route directly to resolve_doi."""
+        mock_resolve_doi.return_value = RAW_BIBTEX_A
+
+        result = resolve_to_bibtex(query)
+
+        mock_resolve_doi.assert_called_once_with("10.2196/jmir.1933")
+        mock_search.assert_not_called()
+        assert len(result) == 1
+        assert "@article{Key1," in result[0]
+
+    @patch("fetchbib.resolver.resolve_doi")
+    @patch("fetchbib.resolver.search_openalex")
+    def test_routes_non_doi_through_search(self, mock_search, mock_resolve_doi):
+        mock_search.return_value = [DOI_A]
+        mock_resolve_doi.return_value = RAW_BIBTEX_A
+
+        result = resolve_to_bibtex(SEARCH_QUERY_A)
+
+        mock_search.assert_called_once_with(SEARCH_QUERY_A, 1)
+        mock_resolve_doi.assert_called_once_with(DOI_A)
+        assert len(result) == 1
+
+    @patch("fetchbib.resolver.resolve_arxiv")
+    @patch("fetchbib.resolver.resolve_doi")
+    @patch("fetchbib.resolver.search_openalex")
+    def test_routes_arxiv_doi_to_arxiv(self, mock_search, mock_resolve_doi, mock_arxiv):
+        mock_arxiv.return_value = "@misc{deverna2024,author={DeVerna},year={2024}}"
+
+        result = resolve_to_bibtex("10.48550/arXiv.2410.21554")
+
+        mock_arxiv.assert_called_once_with("2410.21554")
+        mock_resolve_doi.assert_not_called()
+        mock_search.assert_not_called()
+        assert len(result) == 1
+
+    @patch("fetchbib.resolver.resolve_doi")
+    @patch("fetchbib.resolver.search_openalex")
+    def test_applies_protect_titles(self, mock_search, mock_resolve_doi):
+        mock_resolve_doi.return_value = (
+            "@article{Key,title={A {GPU} Test},author={Smith}}"
+        )
+
+        result = resolve_to_bibtex("10.1234/test", protect_titles=True)
+
+        assert "title = {{A GPU Test}}" in result[0]
+
+    @patch("fetchbib.resolver.resolve_doi")
+    @patch("fetchbib.resolver.search_openalex")
+    def test_applies_exclude_issn(self, mock_search, mock_resolve_doi):
+        mock_resolve_doi.return_value = "@article{Key,title={Test},issn={1234-5678}}"
+
+        result = resolve_to_bibtex("10.1234/test", exclude_issn=True)
+
+        assert "issn" not in result[0].lower()
+
+    @patch("fetchbib.resolver.resolve_doi")
+    @patch("fetchbib.resolver.search_openalex")
+    def test_applies_exclude_doi(self, mock_search, mock_resolve_doi):
+        mock_resolve_doi.return_value = "@article{Key,title={Test},doi={10.1234/ex}}"
+
+        result = resolve_to_bibtex("10.1234/test", exclude_doi=True)
+
+        assert "doi" not in result[0].lower()
+
+    @patch("fetchbib.resolver.resolve_doi")
+    @patch("fetchbib.resolver.search_openalex")
+    def test_returns_multiple_results_for_search(self, mock_search, mock_resolve_doi):
+        mock_search.return_value = [DOI_A, "10.9999/second"]
+        mock_resolve_doi.side_effect = [
+            "@article{Key1,author={Alice}}",
+            "@article{Key2,author={Bob}}",
+        ]
+
+        result = resolve_to_bibtex(SEARCH_QUERY_A, max_results=2)
+
+        assert len(result) == 2
+        mock_search.assert_called_once_with(SEARCH_QUERY_A, 2)
+
+    @patch("fetchbib.resolver.resolve_doi")
+    @patch("fetchbib.resolver.search_openalex")
+    def test_partial_failure_continues(self, mock_search, mock_resolve_doi, capsys):
+        """When one DOI fails during search results, others still return."""
+        mock_search.return_value = [DOI_A, "10.9999/broken"]
+        mock_resolve_doi.side_effect = [
+            "@article{Key1,author={Alice}}",
+            ResolverError("HTTP 500"),
+        ]
+
+        result = resolve_to_bibtex(SEARCH_QUERY_A, max_results=2)
+
+        assert len(result) == 1
+        assert "Key1" in result[0]
+        captured = capsys.readouterr()
+        assert "Warning" in captured.err
+        assert "10.9999/broken" in captured.err
+
+    @patch("fetchbib.resolver.resolve_doi")
+    @patch("fetchbib.resolver.search_openalex")
+    def test_invalid_bibtex_response_continues(
+        self, mock_search, mock_resolve_doi, capsys
+    ):
+        """When a DOI returns HTML instead of BibTeX, warn and continue."""
+        mock_search.return_value = ["10.5281/zenodo.123", DOI_A]
+        mock_resolve_doi.side_effect = [
+            "<!DOCTYPE html><html>...</html>",  # HTML instead of BibTeX
+            "@article{Key1,author={Alice}}",
+        ]
+
+        result = resolve_to_bibtex(SEARCH_QUERY_A, max_results=2)
+
+        assert len(result) == 1
+        assert "Key1" in result[0]
+        captured = capsys.readouterr()
+        assert "Warning" in captured.err
+        assert "10.5281/zenodo.123" in captured.err
+
+    @patch("fetchbib.resolver.resolve_doi")
+    def test_invalid_bibtex_for_direct_doi_raises(self, mock_resolve_doi):
+        """When a direct DOI returns invalid BibTeX, raise ResolverError."""
+        mock_resolve_doi.return_value = "<!DOCTYPE html><html>...</html>"
+
+        with pytest.raises(ResolverError, match="Invalid BibTeX response"):
+            resolve_to_bibtex("10.5281/zenodo.123")
+
+    @patch("fetchbib.resolver.resolve_arxiv")
+    @patch("fetchbib.resolver.resolve_doi")
+    @patch("fetchbib.resolver.search_openalex")
+    def test_arxiv_dois_in_search_results_routed_correctly(
+        self, mock_search, mock_resolve_doi, mock_arxiv
+    ):
+        """arXiv DOIs from search results are routed to resolve_arxiv."""
+        mock_search.return_value = ["10.48550/arxiv.2410.21554"]
+        mock_arxiv.return_value = "@misc{key,author={Someone},year={2024}}"
+
+        result = resolve_to_bibtex(SEARCH_QUERY_A)
+
+        mock_arxiv.assert_called_once_with("2410.21554")
+        mock_resolve_doi.assert_not_called()
+        assert len(result) == 1
+
+    @patch("fetchbib.resolver.resolve_doi")
+    @patch("fetchbib.resolver.search_openalex")
+    def test_all_search_results_fail_raises_error(self, mock_search, mock_resolve_doi):
+        """When all search results fail to resolve, raise ResolverError."""
+        mock_search.return_value = ["10.5281/zenodo.123", "10.5281/zenodo.456"]
+        mock_resolve_doi.side_effect = [
+            ResolverError("HTTP 406"),
+            ResolverError("HTTP 406"),
+        ]
+
+        with pytest.raises(ResolverError, match="All 2 search result"):
+            resolve_to_bibtex(SEARCH_QUERY_A, max_results=2)
