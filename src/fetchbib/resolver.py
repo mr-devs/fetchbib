@@ -70,8 +70,10 @@ def resolve_doi(doi: str) -> str:
     }
     resp = requests.get(f"{DOI_BASE_URL}{doi}", headers=headers)
     if resp.status_code != 200:
+        body = resp.text.strip()
+        detail = f" - {body}" if body else ""
         raise ResolverError(
-            f"DOI resolution failed for '{doi}': HTTP {resp.status_code}"
+            f"DOI resolution failed for '{doi}': HTTP {resp.status_code}{detail}"
         )
     # doi.org returns UTF-8 content but without charset in Content-Type,
     # causing requests to default to ISO-8859-1. Decode as UTF-8 explicitly.
@@ -86,8 +88,10 @@ def resolve_arxiv(arxiv_id: str) -> str:
     headers = {"User-Agent": USER_AGENT}
     resp = requests.get(f"{ARXIV_BIBTEX_URL}{arxiv_id}", headers=headers)
     if resp.status_code != 200:
+        body = resp.text.strip()
+        detail = f" - {body}" if body else ""
         raise ResolverError(
-            f"arXiv resolution failed for '{arxiv_id}': HTTP {resp.status_code}"
+            f"arXiv resolution failed for '{arxiv_id}': HTTP {resp.status_code}{detail}"
         )
     return resp.content.decode("utf-8")
 
@@ -119,7 +123,9 @@ def search_openalex(query: str, max_results: int = 1) -> list[str]:
 
     resp = requests.get(OPENALEX_API_URL, params=params, headers=headers)
     if resp.status_code != 200:
-        raise ResolverError(f"OpenAlex search failed: HTTP {resp.status_code}")
+        body = resp.text.strip()
+        detail = f" - {body}" if body else ""
+        raise ResolverError(f"OpenAlex search failed: HTTP {resp.status_code}{detail}")
 
     if not api_key:
         remaining = resp.headers.get("X-RateLimit-Remaining", "unknown")
