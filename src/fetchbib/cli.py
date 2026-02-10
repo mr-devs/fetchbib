@@ -203,7 +203,7 @@ def _collect_inputs(args: argparse.Namespace) -> list[str]:
 def _smart_split(value: str) -> list[str]:
     """Split on commas only if all parts look like DOIs.
 
-    This prevents search queries containing commas (e.g., author names)
+    This prevents search queries containing commas
     from being incorrectly split into multiple queries.
     """
     if "," not in value:
