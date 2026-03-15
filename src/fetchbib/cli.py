@@ -38,7 +38,7 @@ def main() -> None:
         nargs="*",
         help=(
             "DOIs (e.g., 10.1234/example), DOI URLs (e.g., https://doi.org/10.1234/example), "
-            'or quoted free-text queries (e.g., "Author Title 2024"). '
+            'or quoted free-text title queries (e.g., "Fact-checking information from large language models can decrease headline discernment"). '
             "Comma-separated values are split."
         ),
     )
