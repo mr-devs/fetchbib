@@ -5,6 +5,7 @@ Reads and writes a JSON config file at ~/.config/fetchbib/config.json.
 
 import json
 import os
+import sys
 from pathlib import Path
 
 CONFIG_DIR = Path.home() / ".config" / "fetchbib"
@@ -75,11 +76,18 @@ def set_exclude_doi(enabled: bool) -> None:
 
 
 def _read_config() -> dict:
-    """Read the config file, returning an empty dict if it doesn't exist."""
+    """Read the config file, returning an empty dict if it doesn't exist or is corrupted."""
     if not CONFIG_FILE.exists():
         return {}
     with open(CONFIG_FILE) as f:
-        return json.load(f)
+        try:
+            return json.load(f)
+        except json.JSONDecodeError as exc:
+            print(
+                f"Warning: config file is corrupted ({exc}); using defaults.",
+                file=sys.stderr,
+            )
+            return {}
 
 
 def _write_config(cfg: dict) -> None:

@@ -62,13 +62,16 @@ def extract_arxiv_id(doi: str) -> str:
 def resolve_doi(doi: str) -> str:
     """Fetch BibTeX for a DOI from doi.org.
 
-    Raises ResolverError on non-200 responses.
+    Raises ResolverError on non-200 responses or network failures.
     """
     headers = {
         "Accept": "text/bibliography; style=bibtex",
         "User-Agent": USER_AGENT,
     }
-    resp = requests.get(f"{DOI_BASE_URL}{doi}", headers=headers)
+    try:
+        resp = requests.get(f"{DOI_BASE_URL}{doi}", headers=headers)
+    except requests.exceptions.RequestException as exc:
+        raise ResolverError(f"Network error resolving '{doi}': {exc}") from exc
     if resp.status_code != 200:
         body = resp.text.strip()
         detail = f" - {body}" if body else ""
@@ -83,10 +86,13 @@ def resolve_doi(doi: str) -> str:
 def resolve_arxiv(arxiv_id: str) -> str:
     """Fetch BibTeX for an arXiv paper.
 
-    Raises ResolverError on non-200 responses.
+    Raises ResolverError on non-200 responses or network failures.
     """
     headers = {"User-Agent": USER_AGENT}
-    resp = requests.get(f"{ARXIV_BIBTEX_URL}{arxiv_id}", headers=headers)
+    try:
+        resp = requests.get(f"{ARXIV_BIBTEX_URL}{arxiv_id}", headers=headers)
+    except requests.exceptions.RequestException as exc:
+        raise ResolverError(f"Network error resolving arXiv '{arxiv_id}': {exc}") from exc
     if resp.status_code != 200:
         body = resp.text.strip()
         detail = f" - {body}" if body else ""
@@ -121,7 +127,10 @@ def search_openalex(query: str, max_results: int = 1) -> list[str]:
     if api_key:
         params["api_key"] = api_key
 
-    resp = requests.get(OPENALEX_API_URL, params=params, headers=headers)
+    try:
+        resp = requests.get(OPENALEX_API_URL, params=params, headers=headers)
+    except requests.exceptions.RequestException as exc:
+        raise ResolverError(f"Network error querying OpenAlex: {exc}") from exc
     if resp.status_code != 200:
         body = resp.text.strip()
         detail = f" - {body}" if body else ""
@@ -131,7 +140,12 @@ def search_openalex(query: str, max_results: int = 1) -> list[str]:
         remaining = resp.headers.get("X-RateLimit-Remaining", "unknown")
         _warn_no_api_key_once(remaining)
 
-    results = resp.json()["results"]
+    try:
+        results = resp.json().get("results")
+    except ValueError as exc:
+        raise ResolverError(f"OpenAlex returned invalid JSON: {exc}") from exc
+    if results is None:
+        raise ResolverError("OpenAlex response missing 'results' field")
     if not results:
         raise ResolverError(f"No results found for query: '{query}'")
 
@@ -139,7 +153,7 @@ def search_openalex(query: str, max_results: int = 1) -> list[str]:
     for item in results:
         doi_url = item.get("doi")
         if doi_url:
-            doi = doi_url.removeprefix("https://doi.org/")
+            doi = normalize_doi_input(doi_url)
             dois.append(doi)
         if len(dois) >= max_results:
             break

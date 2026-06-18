@@ -62,7 +62,7 @@ def main() -> None:
         "-n",
         "--max-results",
         type=int,
-        default=1,
+        default=None,
         help="Max results per free-text search (1-100, default: 1)",
     )
     parser.add_argument(
@@ -92,14 +92,17 @@ def main() -> None:
     if args.append and not args.output:
         parser.error("--append requires --output")
 
+    # Resolve --max-results (None means not explicitly set; default to 1)
+    max_results = args.max_results if args.max_results is not None else 1
+
     # Validate --max-results range
-    if args.max_results < 1 or args.max_results > 100:
+    if max_results < 1 or max_results > 100:
         parser.error("--max-results must be between 1 and 100")
 
     # --config-api-key: save and exit immediately
     if args.config_api_key:
         config.set_openalex_api_key(args.config_api_key)
-        print("OpenAlex API key saved.")
+        print("OpenAlex API key saved.", file=sys.stderr)
         sys.exit(0)
 
     # --config-protect-titles: toggle and exit immediately
@@ -107,7 +110,7 @@ def main() -> None:
         new_value = not config.get_protect_titles()
         config.set_protect_titles(new_value)
         state = "enabled (double-braced titles)" if new_value else "disabled"
-        print(f"Title protection {state}.")
+        print(f"Title protection {state}.", file=sys.stderr)
         sys.exit(0)
 
     # --config-exclude-issn: toggle and exit immediately
@@ -115,7 +118,7 @@ def main() -> None:
         new_value = not config.get_exclude_issn()
         config.set_exclude_issn(new_value)
         state = "enabled (ISSN excluded)" if new_value else "disabled"
-        print(f"ISSN exclusion {state}.")
+        print(f"ISSN exclusion {state}.", file=sys.stderr)
         sys.exit(0)
 
     # --config-exclude-doi: toggle and exit immediately
@@ -123,7 +126,7 @@ def main() -> None:
         new_value = not config.get_exclude_doi()
         config.set_exclude_doi(new_value)
         state = "enabled (DOI excluded)" if new_value else "disabled"
-        print(f"DOI exclusion {state}.")
+        print(f"DOI exclusion {state}.", file=sys.stderr)
         sys.exit(0)
 
     # Collect inputs
@@ -136,9 +139,8 @@ def main() -> None:
         sys.exit(1)
 
     # Check if -n was explicitly set but there are no free-text queries
-    max_results_explicitly_set = "-n" in sys.argv or "--max-results" in sys.argv
     has_free_text = any(not is_doi(normalize_doi_input(q)) for q in queries)
-    if max_results_explicitly_set and not has_free_text:
+    if args.max_results is not None and not has_free_text:
         parser.error("--max-results requires at least one free-text query")
 
     # Resolve each input
@@ -147,7 +149,7 @@ def main() -> None:
 
     for query in queries:
         try:
-            bibtex_entries = _resolve_single(query, max_results=args.max_results)
+            bibtex_entries = _resolve_single(query, max_results=max_results)
             results.extend(bibtex_entries)
         except ResolverError as exc:
             print(f"Error resolving '{query}': {exc}", file=sys.stderr)
@@ -160,7 +162,7 @@ def main() -> None:
     # Write output
     if args.output:
         mode = "a" if args.append else "w"
-        with open(args.output, mode) as f:
+        with open(args.output, mode, encoding="utf-8") as f:
             f.write(output_text)
     else:
         print(output_text, end="")
@@ -180,7 +182,7 @@ def _collect_inputs(args: argparse.Namespace) -> list[str]:
     # File input (each line may also be comma-separated DOIs)
     if args.file:
         try:
-            with open(args.file) as f:
+            with open(args.file, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if line:

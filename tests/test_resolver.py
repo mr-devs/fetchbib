@@ -151,6 +151,16 @@ class TestResolveArxiv:
         with pytest.raises(ResolverError, match="arXiv resolution failed.*404"):
             resolve_arxiv("9999.99999")
 
+    @patch("fetchbib.resolver.requests.get")
+    def test_raises_resolver_error_on_network_failure(self, mock_get):
+        """ConnectionError is wrapped in ResolverError, not exposed as raw exception."""
+        import requests as req
+
+        mock_get.side_effect = req.exceptions.ConnectionError("name resolution failed")
+
+        with pytest.raises(ResolverError, match="Network error"):
+            resolve_arxiv("2410.21554")
+
 
 # ---------------------------------------------------------------------------
 # normalize_doi_input
@@ -226,6 +236,16 @@ class TestResolveDoi:
 
         with pytest.raises(ResolverError, match="404"):
             resolve_doi("10.1234/missing")
+
+    @patch("fetchbib.resolver.requests.get")
+    def test_raises_resolver_error_on_network_failure(self, mock_get):
+        """ConnectionError is wrapped in ResolverError, not exposed as raw exception."""
+        import requests as req
+
+        mock_get.side_effect = req.exceptions.ConnectionError("name resolution failed")
+
+        with pytest.raises(ResolverError, match="Network error"):
+            resolve_doi("10.1234/test")
 
 
 # ---------------------------------------------------------------------------
@@ -432,6 +452,45 @@ class TestSearchOpenalex:
         with pytest.raises(ResolverError, match="No results with DOIs found"):
             search_openalex("query with no doi results")
 
+    @patch("fetchbib.resolver.requests.get")
+    def test_raises_resolver_error_on_network_failure(self, mock_get, monkeypatch):
+        """ConnectionError is wrapped in ResolverError, not exposed as raw exception."""
+        import requests as req
+
+        monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+        mock_get.side_effect = req.exceptions.ConnectionError("name resolution failed")
+
+        with pytest.raises(ResolverError, match="Network error"):
+            search_openalex("test query")
+
+    @patch("fetchbib.resolver.requests.get")
+    def test_strips_http_doi_prefix(self, mock_get, monkeypatch):
+        """DOI URLs with http:// scheme are correctly stripped."""
+        monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "results": [{"doi": f"http://doi.org/{DOI_A}"}]
+        }
+        mock_resp.headers = {}
+        mock_get.return_value = mock_resp
+
+        result = search_openalex("test query")
+        assert result == [DOI_A]
+
+    @patch("fetchbib.resolver.requests.get")
+    def test_raises_on_missing_results_key(self, mock_get, monkeypatch):
+        """ResolverError is raised when the JSON response lacks a 'results' key."""
+        monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"error": "unexpected response format"}
+        mock_resp.headers = {}
+        mock_get.return_value = mock_resp
+
+        with pytest.raises(ResolverError, match="missing 'results'"):
+            search_openalex("test query")
+
 
 # ---------------------------------------------------------------------------
 # Config / User-Agent
@@ -499,6 +558,24 @@ class TestApiKeyConfig:
 
         saved = json.loads(config_file.read_text())
         assert saved["openalex_api_key"] == "my_new_key_789"
+
+    def test_corrupted_config_returns_defaults_with_warning(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        """A corrupted config file returns empty dict and warns on stderr."""
+        from fetchbib import config
+
+        config_file = tmp_path / "config.json"
+        config_file.write_text("{not valid json")
+        monkeypatch.setattr(config, "CONFIG_FILE", config_file)
+        monkeypatch.setattr(config, "CONFIG_DIR", tmp_path)
+        monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+
+        result = config.get_openalex_api_key()
+        captured = capsys.readouterr()
+
+        assert result is None
+        assert "corrupted" in captured.err.lower()
 
 
 # ---------------------------------------------------------------------------

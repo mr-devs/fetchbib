@@ -68,6 +68,15 @@ class TestProtectTitle:
         result = _protect_title("{Title with {nested {braces}}}")
         assert result == "{{Title with nested braces}}"
 
+    def test_multiple_top_level_brace_groups_not_corrupted(self):
+        """{foo} and {bar} is not mistaken for a single outer-braced group."""
+        result = _protect_title("{Deep Learning} and {Transformers}")
+        # The whole string has no single outer brace group, so it's wrapped as-is
+        # with inner braces removed: {{Deep Learning and Transformers}}
+        assert result == "{{Deep Learning and Transformers}}"
+        # Crucially, "and" must not be dropped
+        assert "and" in result
+
 
 class TestProtectTitlesOption:
     """Tests for format_bibtex() with protect_titles=True."""

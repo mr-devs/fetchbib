@@ -204,6 +204,22 @@ class TestMaxResults:
         assert code == 2
         assert "free-text" in stderr
 
+    def test_max_results_equals_form_with_only_dois_exits_2(self):
+        """--max-results=N form (with equals sign) is detected correctly."""
+        code, _, stderr = run_cli([f"--max-results=5", DOI_A])
+
+        assert code == 2
+        assert "free-text" in stderr
+
+    @patch("fetchbib.resolver.resolve_doi", return_value=RAW_BIBTEX_A)
+    @patch("fetchbib.resolver.search_openalex", return_value=[DOI_A])
+    def test_max_results_equals_form_works_for_search(self, mock_search, mock_resolve):
+        """--max-results=N form passes the correct value to the search."""
+        code, stdout, _ = run_cli(["--max-results=2", SEARCH_QUERY_A])
+
+        mock_search.assert_called_once_with(SEARCH_QUERY_A, 2)
+        assert code == 0
+
     @patch(
         "fetchbib.resolver.search_openalex",
         return_value=[DOI_A, "10.9999/broken", DOI_B],
@@ -296,10 +312,11 @@ class TestConfigApiKey:
             patch("fetchbib.config.CONFIG_FILE", config_file),
             patch("fetchbib.config.CONFIG_DIR", tmp_path),
         ):
-            code, stdout, _ = run_cli(["--config-api-key", "my_openalex_key_123"])
+            code, stdout, stderr = run_cli(["--config-api-key", "my_openalex_key_123"])
 
         assert code == 0
-        assert "OpenAlex API key saved" in stdout
+        assert stdout == ""  # config messages go to stderr, not stdout
+        assert "OpenAlex API key saved" in stderr
         saved = json.loads(config_file.read_text())
         assert saved["openalex_api_key"] == "my_openalex_key_123"
 
@@ -318,10 +335,11 @@ class TestConfigProtectTitles:
             patch("fetchbib.config.CONFIG_FILE", config_file),
             patch("fetchbib.config.CONFIG_DIR", tmp_path),
         ):
-            code, stdout, _ = run_cli(["--config-protect-titles"])
+            code, stdout, stderr = run_cli(["--config-protect-titles"])
 
         assert code == 0
-        assert "enabled" in stdout.lower()
+        assert stdout == ""
+        assert "enabled" in stderr.lower()
         saved = json.loads(config_file.read_text())
         assert saved["protect_titles"] is True
 
@@ -332,10 +350,11 @@ class TestConfigProtectTitles:
             patch("fetchbib.config.CONFIG_FILE", config_file),
             patch("fetchbib.config.CONFIG_DIR", tmp_path),
         ):
-            code, stdout, _ = run_cli(["--config-protect-titles"])
+            code, stdout, stderr = run_cli(["--config-protect-titles"])
 
         assert code == 0
-        assert "disabled" in stdout.lower()
+        assert stdout == ""
+        assert "disabled" in stderr.lower()
         saved = json.loads(config_file.read_text())
         assert saved["protect_titles"] is False
 
@@ -354,10 +373,11 @@ class TestConfigExcludeIssn:
             patch("fetchbib.config.CONFIG_FILE", config_file),
             patch("fetchbib.config.CONFIG_DIR", tmp_path),
         ):
-            code, stdout, _ = run_cli(["--config-exclude-issn"])
+            code, stdout, stderr = run_cli(["--config-exclude-issn"])
 
         assert code == 0
-        assert "enabled" in stdout.lower()
+        assert stdout == ""
+        assert "enabled" in stderr.lower()
         saved = json.loads(config_file.read_text())
         assert saved["exclude_issn"] is True
 
@@ -368,10 +388,11 @@ class TestConfigExcludeIssn:
             patch("fetchbib.config.CONFIG_FILE", config_file),
             patch("fetchbib.config.CONFIG_DIR", tmp_path),
         ):
-            code, stdout, _ = run_cli(["--config-exclude-issn"])
+            code, stdout, stderr = run_cli(["--config-exclude-issn"])
 
         assert code == 0
-        assert "disabled" in stdout.lower()
+        assert stdout == ""
+        assert "disabled" in stderr.lower()
         saved = json.loads(config_file.read_text())
         assert saved["exclude_issn"] is False
 
@@ -390,10 +411,11 @@ class TestConfigExcludeDoi:
             patch("fetchbib.config.CONFIG_FILE", config_file),
             patch("fetchbib.config.CONFIG_DIR", tmp_path),
         ):
-            code, stdout, _ = run_cli(["--config-exclude-doi"])
+            code, stdout, stderr = run_cli(["--config-exclude-doi"])
 
         assert code == 0
-        assert "enabled" in stdout.lower()
+        assert stdout == ""
+        assert "enabled" in stderr.lower()
         saved = json.loads(config_file.read_text())
         assert saved["exclude_doi"] is True
 
@@ -404,9 +426,10 @@ class TestConfigExcludeDoi:
             patch("fetchbib.config.CONFIG_FILE", config_file),
             patch("fetchbib.config.CONFIG_DIR", tmp_path),
         ):
-            code, stdout, _ = run_cli(["--config-exclude-doi"])
+            code, stdout, stderr = run_cli(["--config-exclude-doi"])
 
         assert code == 0
-        assert "disabled" in stdout.lower()
+        assert stdout == ""
+        assert "disabled" in stderr.lower()
         saved = json.loads(config_file.read_text())
         assert saved["exclude_doi"] is False
