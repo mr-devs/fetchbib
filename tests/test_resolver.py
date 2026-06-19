@@ -469,9 +469,7 @@ class TestSearchOpenalex:
         monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        mock_resp.json.return_value = {
-            "results": [{"doi": f"http://doi.org/{DOI_A}"}]
-        }
+        mock_resp.json.return_value = {"results": [{"doi": f"http://doi.org/{DOI_A}"}]}
         mock_resp.headers = {}
         mock_get.return_value = mock_resp
 
@@ -489,6 +487,19 @@ class TestSearchOpenalex:
         mock_get.return_value = mock_resp
 
         with pytest.raises(ResolverError, match="missing 'results'"):
+            search_openalex("test query")
+
+    @patch("fetchbib.resolver.requests.get")
+    def test_raises_on_non_object_json(self, mock_get, monkeypatch):
+        """ResolverError is raised when the 200 body is valid JSON but not an object."""
+        monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = []
+        mock_resp.headers = {}
+        mock_get.return_value = mock_resp
+
+        with pytest.raises(ResolverError, match="non-object"):
             search_openalex("test query")
 
 

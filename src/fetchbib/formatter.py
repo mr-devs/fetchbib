@@ -119,36 +119,13 @@ def _clean_citation_key(header: str) -> str:
     return re.sub(r"_+", "_", header)
 
 
-def _is_single_braced_group(s: str) -> bool:
-    """Return True if s is a single {…} group spanning the entire string."""
-    if not (s.startswith("{") and s.endswith("}")):
-        return False
-    depth = 0
-    for i, ch in enumerate(s):
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-        if depth == 0 and i < len(s) - 1:
-            return False
-    return depth == 0
-
-
 def _protect_title(value: str) -> str:
-    """Transform a braced title value to use double braces.
+    """Transform a title value to use double braces (preserving case).
 
-    Removes inner braces and wraps the content in double braces.
+    Removes all braces and wraps the content in double braces.
     Example: {This is {THE} title} -> {{This is THE title}}
     """
-    stripped = value.strip()
-    if _is_single_braced_group(stripped):
-        inner = stripped[1:-1]
-    else:
-        inner = stripped
-
-    # Remove all inner braces
-    content = inner.replace("{", "").replace("}", "")
-
+    content = value.strip().replace("{", "").replace("}", "")
     return "{{" + content + "}}"
 
 

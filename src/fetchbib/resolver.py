@@ -92,7 +92,9 @@ def resolve_arxiv(arxiv_id: str) -> str:
     try:
         resp = requests.get(f"{ARXIV_BIBTEX_URL}{arxiv_id}", headers=headers)
     except requests.exceptions.RequestException as exc:
-        raise ResolverError(f"Network error resolving arXiv '{arxiv_id}': {exc}") from exc
+        raise ResolverError(
+            f"Network error resolving arXiv '{arxiv_id}': {exc}"
+        ) from exc
     if resp.status_code != 200:
         body = resp.text.strip()
         detail = f" - {body}" if body else ""
@@ -141,9 +143,12 @@ def search_openalex(query: str, max_results: int = 1) -> list[str]:
         _warn_no_api_key_once(remaining)
 
     try:
-        results = resp.json().get("results")
+        data = resp.json()
     except ValueError as exc:
         raise ResolverError(f"OpenAlex returned invalid JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ResolverError("OpenAlex returned an unexpected (non-object) response")
+    results = data.get("results")
     if results is None:
         raise ResolverError("OpenAlex response missing 'results' field")
     if not results:
