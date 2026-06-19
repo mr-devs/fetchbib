@@ -70,7 +70,7 @@ Requires Python 3.9+.
 fbib [-h] [-f FILE] [-o OUTPUT] [-a] [-n MAX_RESULTS]
      [--config-api-key KEY] [--config-protect-titles]
      [--config-exclude-issn] [--config-exclude-doi]
-     [inputs ...]
+     [--print-config] [inputs ...]
 ```
 
 ### Flexible input
@@ -176,7 +176,13 @@ fbib --config-exclude-doi
 
 Run again to toggle off.
 
-## Development
+### View current settings
+
+Print the current state of all configurable settings (and whether an OpenAlex API key is set) to stdout:
+
+```bash
+fbib --print-config
+```
 
 Clone the repo and sync dependencies with [uv](https://docs.astral.sh/uv/):
 
