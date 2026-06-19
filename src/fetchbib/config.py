@@ -33,6 +33,15 @@ def set_openalex_api_key(key: str) -> None:
     _write_config(cfg)
 
 
+def get_openalex_api_key_status() -> str:
+    """Return a human-readable status for the OpenAlex API key without revealing it."""
+    if os.environ.get(OPENALEX_API_KEY_ENV):
+        return "set (from environment variable)"
+    if _read_config().get("openalex_api_key"):
+        return "set (from config file)"
+    return "not set"
+
+
 def _get_bool(key: str, default: bool = False) -> bool:
     """Return a boolean config value, with a default if not set."""
     return _read_config().get(key, default)

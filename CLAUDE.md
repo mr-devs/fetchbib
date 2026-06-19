@@ -75,8 +75,12 @@ This project follows **test-driven development (TDD)**:
 
 ## CLI Conventions
 
-- **stdout**: Only output results (BibTeX entries)
-- **stderr**: All errors, warnings, and verbose/informational messages
+- **stdout**: Command results only — BibTeX entries, or informational output the
+  user explicitly asked for as the result of the command (e.g. `--print-config`).
+  Keeping such output on stdout makes it pipeable and greppable.
+- **stderr**: Everything incidental — errors, warnings, and progress or
+  confirmation messages emitted as a side effect of another action (e.g. the
+  "API key saved" / toggle confirmations from the `--config-*` flags).
 - **Exit codes**:
   - `0` - Success
   - `1` - Runtime error (resolution failure, file not found, no inputs)

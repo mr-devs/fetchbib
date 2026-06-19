@@ -206,7 +206,7 @@ class TestMaxResults:
 
     def test_max_results_equals_form_with_only_dois_exits_2(self):
         """--max-results=N form (with equals sign) is detected correctly."""
-        code, _, stderr = run_cli([f"--max-results=5", DOI_A])
+        code, _, stderr = run_cli(["--max-results=5", DOI_A])
 
         assert code == 2
         assert "free-text" in stderr
@@ -433,3 +433,86 @@ class TestConfigExcludeDoi:
         assert "disabled" in stderr.lower()
         saved = json.loads(config_file.read_text())
         assert saved["exclude_doi"] is False
+
+
+# ---------------------------------------------------------------------------
+# Print config
+# ---------------------------------------------------------------------------
+
+
+class TestPrintConfig:
+    """Tests for --print-config."""
+
+    def test_print_config_shows_defaults_to_stdout(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+        config_file = tmp_path / "config.json"  # does not exist -> all defaults
+        with (
+            patch("fetchbib.config.CONFIG_FILE", config_file),
+            patch("fetchbib.config.CONFIG_DIR", tmp_path),
+        ):
+            code, stdout, stderr = run_cli(["--print-config"])
+
+        assert code == 0
+        assert stderr == ""  # the listing goes to stdout, not stderr
+        assert "Protect titles" in stdout
+        assert "Exclude ISSN" in stdout
+        assert "Exclude DOI" in stdout
+        assert "OpenAlex API key" in stdout
+        # Booleans default to off; API key not set
+        assert "off" in stdout
+        assert "not set" in stdout
+        # References the config file location
+        assert str(config_file) in stdout
+
+    def test_print_config_reflects_non_default_values(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"protect_titles": True}))
+        with (
+            patch("fetchbib.config.CONFIG_FILE", config_file),
+            patch("fetchbib.config.CONFIG_DIR", tmp_path),
+        ):
+            code, stdout, _ = run_cli(["--print-config"])
+
+        assert code == 0
+        assert "on" in stdout  # protect_titles is now on
+
+    def test_print_config_api_key_from_config_file(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"openalex_api_key": "secret123"}))
+        with (
+            patch("fetchbib.config.CONFIG_FILE", config_file),
+            patch("fetchbib.config.CONFIG_DIR", tmp_path),
+        ):
+            code, stdout, _ = run_cli(["--print-config"])
+
+        assert code == 0
+        assert "set (from config file)" in stdout
+        assert "secret123" not in stdout  # never reveal the key value
+
+    def test_print_config_api_key_from_env(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENALEX_API_KEY", "env_secret")
+        config_file = tmp_path / "config.json"
+        with (
+            patch("fetchbib.config.CONFIG_FILE", config_file),
+            patch("fetchbib.config.CONFIG_DIR", tmp_path),
+        ):
+            code, stdout, _ = run_cli(["--print-config"])
+
+        assert code == 0
+        assert "set (from environment variable)" in stdout
+        assert "env_secret" not in stdout
+
+    def test_print_config_works_with_no_inputs(self, tmp_path, monkeypatch):
+        """--print-config should not trigger the 'no inputs' error path."""
+        monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+        config_file = tmp_path / "config.json"
+        with (
+            patch("fetchbib.config.CONFIG_FILE", config_file),
+            patch("fetchbib.config.CONFIG_DIR", tmp_path),
+        ):
+            code, _, stderr = run_cli(["--print-config"])
+
+        assert code == 0
+        assert "no inputs" not in stderr.lower()

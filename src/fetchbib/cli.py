@@ -85,6 +85,11 @@ def main() -> None:
         action="store_true",
         help="Toggle exclusion of DOI from BibTeX entries and exit",
     )
+    parser.add_argument(
+        "--print-config",
+        action="store_true",
+        help="Print current settings and exit",
+    )
 
     args = parser.parse_args()
 
@@ -129,6 +134,11 @@ def main() -> None:
         print(f"DOI exclusion {state}.", file=sys.stderr)
         sys.exit(0)
 
+    # --print-config: report current settings to stdout and exit
+    if args.print_config:
+        _print_config()
+        sys.exit(0)
+
     # Collect inputs
     queries = _collect_inputs(args)
     if not queries:
@@ -169,6 +179,46 @@ def main() -> None:
 
     if had_error:
         sys.exit(1)
+
+
+def _print_config() -> None:
+    """Print the current state of all user-configurable settings to stdout."""
+
+    def state(enabled: bool) -> str:
+        return "on" if enabled else "off"
+
+    settings = [
+        (
+            "Protect titles (double-brace)",
+            state(config.get_protect_titles()),
+            "--config-protect-titles",
+        ),
+        (
+            "Exclude ISSN from entries",
+            state(config.get_exclude_issn()),
+            "--config-exclude-issn",
+        ),
+        (
+            "Exclude DOI from entries",
+            state(config.get_exclude_doi()),
+            "--config-exclude-doi",
+        ),
+        (
+            "OpenAlex API key",
+            config.get_openalex_api_key_status(),
+            "--config-api-key KEY",
+        ),
+    ]
+    label_width = max(len(label) for label, _, _ in settings)
+
+    print("fetchbib settings")
+    print("=" * 40)
+    print(f"Config file: {config.CONFIG_FILE}")
+    print()
+    for label, value, flag in settings:
+        verb = "set" if flag.endswith("KEY") else "toggle"
+        print(f"  {label.ljust(label_width)} : {value}")
+        print(f"  {' ' * label_width}   {verb} with {flag}")
 
 
 def _collect_inputs(args: argparse.Namespace) -> list[str]:
